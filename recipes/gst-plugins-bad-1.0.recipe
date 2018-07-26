@@ -31,6 +31,8 @@ class Recipe(custom.GStreamer):
             'spandsp', 'webrtc-audio-processing', 'sbc']
     use_system_libs = True
 
+    patches = ['gst-plugins-bad-1.0/0001-Workaround-for-Electron-Chrome-mis-reporting-retina-.patch']
+
     files_lang = ['gst-plugins-bad-1.0']
 
     files_libs = ['libgstcodecparsers-1.0', 'libgstmpegts-1.0', 'libgsturidownloader-1.0',
