@@ -1,0 +1,43 @@
+From ba6c32c2211e12f6f46c301c9c154651590a2e5b Mon Sep 17 00:00:00 2001
+From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
+Date: Tue, 1 Oct 2019 14:41:47 +1000
+Subject: [PATCH 2/2] souphttpsrc: Always apply proxy
+
+---
+ ext/soup/gstsouphttpsrc.c | 20 ++++++--------------
+ 1 file changed, 6 insertions(+), 14 deletions(-)
+
+diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
+index f06c923..a00a2bb 100644
+--- a/ext/soup/gstsouphttpsrc.c
++++ b/ext/soup/gstsouphttpsrc.c
+@@ -953,20 +953,12 @@ gst_soup_http_src_session_open (GstSoupHTTPSrc * src)
+       /* We explicitly set User-Agent to NULL here and overwrite it per message
+        * to be able to have the same session with different User-Agents per
+        * source */
+-      if (src->proxy == NULL) {
+-        src->session =
+-            soup_session_new_with_options (SOUP_SESSION_USER_AGENT,
+-            NULL, SOUP_SESSION_TIMEOUT, src->timeout,
+-            SOUP_SESSION_SSL_STRICT, src->ssl_strict,
+-            SOUP_SESSION_TLS_INTERACTION, src->tls_interaction, NULL);
+-      } else {
+-        src->session =
+-            soup_session_new_with_options (SOUP_SESSION_PROXY_URI, src->proxy,
+-            SOUP_SESSION_TIMEOUT, src->timeout,
+-            SOUP_SESSION_SSL_STRICT, src->ssl_strict,
+-            SOUP_SESSION_USER_AGENT, NULL,
+-            SOUP_SESSION_TLS_INTERACTION, src->tls_interaction, NULL);
+-      }
++      src->session =
++          soup_session_new_with_options (SOUP_SESSION_PROXY_URI, src->proxy,
++          SOUP_SESSION_TIMEOUT, src->timeout,
++          SOUP_SESSION_SSL_STRICT, src->ssl_strict,
++          SOUP_SESSION_USER_AGENT, NULL,
++          SOUP_SESSION_TLS_INTERACTION, src->tls_interaction, NULL);
+ 
+       if (src->session) {
+         gst_soup_util_log_setup (src->session, src->log_level,
+-- 
+2.17.1
+
