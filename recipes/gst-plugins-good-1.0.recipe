@@ -33,6 +33,8 @@ class Recipe(custom.GStreamer):
             'speex', 'gdk-pixbuf', 'libsoup', 'mpg123', 'lame',
             'orc', 'wavpack', 'flac', 'taglib', 'bzip2', 'zlib',
             'libvpx', 'libdv', 'cairo']
+    patches = ['gst-plugins-good-1.0/0001-qtdemux-Raise-max-atom-size.patch',
+               'gst-plugins-good-1.0/0002-souphttpsrc-Always-apply-proxy.patch',]
 
 
     files_lang = ['gst-plugins-good-1.0']
