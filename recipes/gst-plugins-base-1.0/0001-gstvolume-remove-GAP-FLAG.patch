@@ -1,0 +1,26 @@
+From 9370b6680aa408848498b8e3d95e7c8368a3f7b6 Mon Sep 17 00:00:00 2001
+From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
+Date: Tue, 1 Oct 2019 14:24:46 +1000
+Subject: [PATCH] gstvolume: remove GAP FLAG
+
+---
+ gst/volume/gstvolume.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/gst/volume/gstvolume.c b/gst/volume/gstvolume.c
+index fc10191..930dadc 100644
+--- a/gst/volume/gstvolume.c
++++ b/gst/volume/gstvolume.c
+@@ -795,7 +795,8 @@ volume_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
+ 
+   if (self->current_volume == 0.0 || self->current_mute) {
+     orc_memset (map.data, 0, map.size);
+-    GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP);
++    /* disable FLAG as it causes SEGV in audio_base_sink when PTS=NONE */
++    /* GST_BUFFER_FLAG_SET (outbuf, GST_BUFFER_FLAG_GAP); */
+   } else if (self->current_volume != 1.0) {
+     self->process (self, map.data, map.size);
+   }
+-- 
+2.17.1
+
