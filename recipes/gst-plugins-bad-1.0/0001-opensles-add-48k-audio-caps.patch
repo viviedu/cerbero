@@ -1,0 +1,25 @@
+From 648c2ca7315ac43aa97ff0eb21a15b586c8ada6f Mon Sep 17 00:00:00 2001
+From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
+Date: Thu, 10 Oct 2019 12:33:14 +1100
+Subject: [PATCH] opensles: add 48k audio caps
+
+---
+ sys/opensles/openslessink.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sys/opensles/openslessink.c b/sys/opensles/openslessink.c
+index c4c0492..6b956da 100644
+--- a/sys/opensles/openslessink.c
++++ b/sys/opensles/openslessink.c
+@@ -57,7 +57,7 @@ enum
+ 
+ 
+ /* According to Android's NDK doc the following are the supported rates */
+-#define RATES "8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100"
++#define RATES "8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000"
+ /* 48000 Hz is also claimed to be supported but the AudioFlinger downsampling
+  * doesn't seems to work properly so we relay GStreamer audioresample element
+  * to cope with this samplerate. */
+-- 
+2.17.1
+

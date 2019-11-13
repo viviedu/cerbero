@@ -69,6 +69,10 @@ class Recipe(custom.GStreamer):
             'srt', 'libusrsctp']
     use_system_libs = True
 
+    # enable line below to enable 48k sink output.
+    # this works fine for goldfinger, but might not be suitable for other devices.
+    # patches = ['gst-plugins-bad-1.0/0001-opensles-add-48k-audio-caps.patch',]
+
     files_lang = ['gst-plugins-bad-1.0']
 
     files_libs = ['libgstcodecparsers-1.0', 'libgstmpegts-1.0', 'libgsturidownloader-1.0',
