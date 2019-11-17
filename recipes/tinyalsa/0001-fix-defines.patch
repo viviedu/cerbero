@@ -1,0 +1,52 @@
+From cccfc18004e619950183e4ce9d7997edaa0e77e7 Mon Sep 17 00:00:00 2001
+From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
+Date: Fri, 8 Nov 2019 10:06:55 +1100
+Subject: [PATCH] fix #defines
+
+---
+ src/mixer.c | 2 ++
+ src/pcm.c   | 5 +++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/src/mixer.c b/src/mixer.c
+index d07797a..8091f4a 100644
+--- a/src/mixer.c
++++ b/src/mixer.c
+@@ -42,7 +42,9 @@
+ 
+ #include <linux/ioctl.h>
+ #define __force
++#ifndef __bitwise
+ #define __bitwise
++#endif
+ #define __user
+ #include <sound/asound.h>
+ 
+diff --git a/src/pcm.c b/src/pcm.c
+index ef38c9c..1edd97d 100644
+--- a/src/pcm.c
++++ b/src/pcm.c
+@@ -43,7 +43,9 @@
+ 
+ #include <linux/ioctl.h>
+ #define __force
++#ifndef __bitwise
+ #define __bitwise
++#endif
+ #define __user
+ #include <sound/asound.h>
+ 
+@@ -51,7 +53,10 @@
+ #include <tinyalsa/limits.h>
+ 
+ #define PARAM_MAX SNDRV_PCM_HW_PARAM_LAST_INTERVAL
++
++#ifndef SNDRV_PCM_HW_PARAMS_NO_PERIOD_WAKEUP
+ #define SNDRV_PCM_HW_PARAMS_NO_PERIOD_WAKEUP (1<<2)
++#endif
+ 
+ static inline int param_is_mask(int p)
+ {
+-- 
+2.17.1
+
