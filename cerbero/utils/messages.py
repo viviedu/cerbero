@@ -90,8 +90,8 @@ class StdoutManager:
             # VIVI-7003
             # This caused a division by 0 error on buildkite. Just hardcode the
             # shell width to a reasonable value
-            # self.clear_lines = len (status) // shutil.get_terminal_size().columns
-            self.clear_lines = len (status) // 80
+            columns = shutil.get_terminal_size().columns
+            self.clear_lines = len (status) // (columns or 80)
 
 STDOUT = StdoutManager()
 
