@@ -32,6 +32,7 @@ class Recipe(custom.GStreamer):
                      'voaacenc': 'enabled',
                      'webrtc': 'enabled',
                      'webrtcdsp': 'enabled',
+                     'tinyalsa': 'enabled',
                      # disabled plugins
                      'curl': 'disabled',
                      'curl-ssh2': 'disabled',
@@ -66,7 +67,7 @@ class Recipe(custom.GStreamer):
             'libsrtp', 'libdca', 'libmms', 'libdvdnav', 'libnice',
             'soundtouch', 'vo-aacenc', 'librsvg', 'openjpeg', 'openssl',
             'pango', 'spandsp', 'webrtc-audio-processing', 'sbc', 'ladspa',
-            'srt', 'libusrsctp']
+            'srt', 'libusrsctp', 'tinyalsa']
     use_system_libs = True
 
     # enable line below to enable 48k sink output.
@@ -375,6 +376,7 @@ class Recipe(custom.GStreamer):
             ],
         Platform.ANDROID: [
              'lib/gstreamer-1.0/libgstopensles%(mext)s',
+             'lib/gstreamer-1.0/libgsttinyalsa%(mext)s',
              'lib/gstreamer-1.0/libgstipcpipeline%(mext)s',
             ]
     }
@@ -403,6 +405,7 @@ class Recipe(custom.GStreamer):
             ],
         Platform.ANDROID: [
              'lib/gstreamer-1.0/libgstopensles.a', 'lib/gstreamer-1.0/libgstopensles.la',
+             'lib/gstreamer-1.0/libgsttinyalsa.a',
              'lib/gstreamer-1.0/libgstipcpipeline.a', 'lib/gstreamer-1.0/libgstipcpipeline.la',
             ]
     }

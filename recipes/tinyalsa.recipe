@@ -13,8 +13,12 @@ class Recipe(recipe.Recipe):
     btype = BuildType.MAKEFILE
     remotes = {'origin': 'https://github.com/tinyalsa/tinyalsa'}
     commit = '1.1.1'
+    library_type = LibraryType.STATIC
 
-    files_devel = [ 'include/tinyalsa/asoundlib.h' ]
+    patches = ['tinyalsa/0001-fix-defines.patch',
+               'tinyalsa/0002-build-lib-only.patch',]
+
+    files_devel = [ 'include/tinyalsa/' ]
 
     files_libs = [ 'libtinyalsa' ]
 
@@ -22,15 +26,24 @@ class Recipe(recipe.Recipe):
         if self.config.target_platform != Platform.LINUX and self.config.target_platform != Platform.ANDROID:
             raise InvalidRecipeError(self, "Invalid platform")
 
+        # based on similar c libraries
+        self.make = 'make CC="$CC" LD="$CC"'
+
     def install(self):
         include_path = os.path.join(self.config.prefix, 'include', 'tinyalsa')
         library_path = os.path.join(self.config.prefix, 'lib')
 
         tinyalsa_header = os.path.join(self.build_dir, 'include', 'tinyalsa', 'asoundlib.h')
+        tinyalsa_mixer = os.path.join(self.build_dir, 'include', 'tinyalsa', 'mixer.h')
+        tinyalsa_pcm = os.path.join(self.build_dir, 'include', 'tinyalsa', 'pcm.h')
+        tinyalsa_version = os.path.join(self.build_dir, 'include', 'tinyalsa', 'version.h')
         tinyalsa_lib = os.path.join(self.build_dir, 'src', 'libtinyalsa.a')
 
         if not os.path.exists(include_path):
             os.makedirs(include_path)
 
         shutil.copy(tinyalsa_header, include_path)
+        shutil.copy(tinyalsa_mixer, include_path)
+        shutil.copy(tinyalsa_pcm, include_path)
+        shutil.copy(tinyalsa_version, include_path)
         shutil.copy(tinyalsa_lib, library_path)

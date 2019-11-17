@@ -1,0 +1,38 @@
+From 0353587fff12b978c4035b7df2841f0f7eafc638 Mon Sep 17 00:00:00 2001
+From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
+Date: Fri, 8 Nov 2019 10:15:52 +1100
+Subject: [PATCH] build lib only
+
+---
+ Makefile | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 7042a3c..f78b829 100644
+--- a/Makefile
++++ b/Makefile
+@@ -10,9 +10,9 @@ export MANDIR ?= $(PREFIX)/share/man
+ .PHONY: all
+ all:
+ 	$(MAKE) -C src
+-	$(MAKE) -C utils
+-	$(MAKE) -C doxygen
+-	$(MAKE) -C examples
++	# $(MAKE) -C utils
++	# $(MAKE) -C doxygen
++	# $(MAKE) -C examples
+ 
+ .PHONY: clean
+ clean:
+@@ -29,6 +29,6 @@ install:
+ 	install include/tinyalsa/asoundlib.h $(DESTDIR)$(INCDIR)/
+ 	install include/tinyalsa/version.h $(DESTDIR)$(INCDIR)/
+ 	$(MAKE) -C src install
+-	$(MAKE) -C utils install
+-	$(MAKE) -C doxygen install
++	#$(MAKE) -C utils install
++	#$(MAKE) -C doxygen install
+ 
+-- 
+2.17.1
+
