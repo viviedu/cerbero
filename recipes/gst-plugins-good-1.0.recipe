@@ -35,8 +35,7 @@ class Recipe(custom.GStreamer):
             'libvpx', 'libdv', 'cairo']
     patches = ['gst-plugins-good-1.0/0001-qtdemux-Raise-max-atom-size.patch',
                'gst-plugins-good-1.0/0002-souphttpsrc-Always-apply-proxy.patch',
-               'gst-plugins-good-1.0/0003-increase-rank-of-vp8dec.patch',
-               'gst-plugins-good-1.0/0004-gstsouphttpsrc-remove-shared-session-check-in-auth.patch',]
+               'gst-plugins-good-1.0/0003-gstsouphttpsrc-remove-shared-session-check-in-auth.patch',]
 
     files_lang = ['gst-plugins-good-1.0']
 
