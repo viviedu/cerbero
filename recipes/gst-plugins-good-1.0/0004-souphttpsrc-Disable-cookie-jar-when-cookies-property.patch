@@ -1,0 +1,25 @@
+From 76b592bb62945546f2a9938555d49202ce9cd679 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jake@vivi.io>
+Date: Wed, 19 Feb 2020 15:59:19 +1100
+Subject: [PATCH] souphttpsrc: Disable cookie jar when cookies property is set
+
+---
+ ext/soup/gstsouphttpsrc.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
+index 2d20465ad..22b6e8900 100644
+--- a/ext/soup/gstsouphttpsrc.c
++++ b/ext/soup/gstsouphttpsrc.c
+@@ -1499,6 +1499,8 @@ gst_soup_http_src_build_message (GstSoupHTTPSrc * src, const gchar * method)
+       soup_message_headers_append (src->msg->request_headers, "Cookie",
+           *cookie);
+     }
++
++    soup_message_disable_feature (src->msg, SOUP_TYPE_COOKIE_JAR);
+   }
+ 
+   if (!src->compress)
+-- 
+2.25.1
+
