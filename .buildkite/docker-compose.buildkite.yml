@@ -1,0 +1,11 @@
+version: '3.4'
+
+services:
+  bootstrap:
+    build:
+      context: ..
+      dockerfile: .buildkite/Dockerfile.bootstrap
+  package:
+    build:
+      context: ..
+      dockerfile: .buildkite/Dockerfile.package
