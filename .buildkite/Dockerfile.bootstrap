@@ -16,6 +16,4 @@ COPY . ./
 
 RUN ./cerbero-uninstalled -c config/cross-android-universal.cbc bootstrap -y
 
-RUN ./cerbero-uninstalled -c config/cross-android-universal.cbc package gstreamer-1.0 && \
-    rm gstreamer-1.0-android-universal-1.16.1-runtime.tar.bz2 && \
-    rm gstreamer-1.0-android-universal-1.16.1.tar.bz2
+RUN ./cerbero-uninstalled -c config/cross-android-universal.cbc package --only-build-deps gstreamer-1.0
