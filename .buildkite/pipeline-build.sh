@@ -15,7 +15,7 @@ steps:
     key: bootstrap
     if: "'${bootstrap}' == 'true'"
     agents:
-      queue: aosp
+      queue: thicc
     plugins:
       - docker-compose#v3.2.0:
           config: .buildkite/docker-compose.buildkite.yml
@@ -28,7 +28,7 @@ steps:
     key: package
     depends_on: bootstrap
     agents:
-      queue: aosp
+      queue: thicc
     command: .buildkite/scripts/package.sh
     plugins:
       - viviedu/docker-compose#dd0a3f4:
