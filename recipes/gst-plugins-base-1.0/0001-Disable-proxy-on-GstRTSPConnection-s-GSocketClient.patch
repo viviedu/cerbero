@@ -1,0 +1,25 @@
+From d2ea3637b974f5fd4b9cb23bdbabebd5501395b6 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jake@vivi.io>
+Date: Thu, 26 Mar 2020 02:33:28 +0000
+Subject: [PATCH] Disable proxy on GstRTSPConnection's GSocketClient
+
+---
+ gst-libs/gst/rtsp/gstrtspconnection.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/gst-libs/gst/rtsp/gstrtspconnection.c b/gst-libs/gst/rtsp/gstrtspconnection.c
+index 606192ef1..449626b4f 100644
+--- a/gst-libs/gst/rtsp/gstrtspconnection.c
++++ b/gst-libs/gst/rtsp/gstrtspconnection.c
+@@ -351,6 +351,8 @@ gst_rtsp_connection_create (const GstRTSPUrl * url, GstRTSPConnection ** conn)
+   newconn->cancellable = g_cancellable_new ();
+   newconn->client = g_socket_client_new ();
+ 
++  g_socket_client_set_enable_proxy(newconn->client, FALSE);
++
+   if (url->transports & GST_RTSP_LOWER_TRANS_TLS)
+     g_socket_client_set_tls (newconn->client, TRUE);
+ 
+-- 
+2.11.0
+
