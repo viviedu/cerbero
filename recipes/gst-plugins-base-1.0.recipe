@@ -20,7 +20,10 @@ class Recipe(custom.GStreamer):
             'libjpeg-turbo', 'libpng']
     platform_deps = {Platform.ANDROID: [ 'tremor' ], Platform.IOS: [ 'tremor' ] }
     use_system_libs = True
-    patches = ['gst-plugins-base-1.0/0001-gstvolume-remove-GAP-FLAG.patch',]
+    patches = [
+            'gst-plugins-base-1.0/0001-gstvolume-remove-GAP-FLAG.patch',
+            'gst-plugins-base-1.0/0001-Disable-proxy-on-GstRTSPConnection-s-GSocketClient.patch'
+    ]
 
     files_bins = ['gst-discoverer-1.0', 'gst-play-1.0', 'gst-device-monitor-1.0']
 
