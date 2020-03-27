@@ -23,7 +23,7 @@ class Recipe(recipe.Recipe):
     def prepare(self):
         # clang x86-32 fails at generating proper asm PIC code
         # See bug https://bugzilla.gnome.org/show_bug.cgi?id=727079
-        enable_asm = True
+        enable_asm = False
         AS = ['yasm']
 
         arch = self.config.target_arch

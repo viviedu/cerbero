@@ -83,3 +83,5 @@ class Recipe(custom.GStreamer):
 
         if self.using_msvc():
             self.meson_options['dbghlp'] = 'enabled'
+
+        self.meson_options['registry'] = 'false'
