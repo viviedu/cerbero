@@ -11,7 +11,7 @@ from cerbero.utils import shell, to_unixpath
 
 class GStreamer(recipe.Recipe):
     licenses = [License.LGPLv2Plus]
-    version = '1.16.1'
+    version = '1.16.2'
     tagged_for_release = True
 
     if not tagged_for_release or recipe.Recipe._using_manifest_force_git:
