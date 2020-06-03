@@ -69,6 +69,8 @@ class Recipe(custom.GStreamer):
             'srt', 'libusrsctp']
     use_system_libs = True
 
+    patches = ['gst-plugins-bad-1.0/0001-winscreencap-Add-screen-capture-element-using-Deskto.patch']
+
     files_lang = ['gst-plugins-bad-1.0']
 
     files_libs = ['libgstcodecparsers-1.0', 'libgstmpegts-1.0', 'libgsturidownloader-1.0',

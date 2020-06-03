@@ -1,0 +1,2212 @@
+From 21f90f163b9a2d4b6c5275cecc37788998826a1d Mon Sep 17 00:00:00 2001
+From: Jun-ichi OKADA <okada@abt.jp>
+Date: Thu, 21 Nov 2019 13:50:21 +0900
+Subject: [PATCH] winscreencap: Add screen capture element using Desktop
+ Duplication API.
+
+winscreencap: Fix ignore the headers that depend on it if d3d11 does not exist.
+
+winscreencap: dxgiscreencapsrc is enabled when Windows 8 or later.
+
+winscreencap: Changed to get the IID definition of Direc3D from the SDK.
+
+winscreencap: Fix meson.build error in CI.
+
+winscreencap: Remove GST_DEBUG_FUNCPTR from set/get_property.
+
+winscreencap: Fixed multiple release of GstDXGIScreenCapSrc.device_name.
+
+winscreencap: Fixed using g_value_set_string when getting DEVICE_NAME property.
+
+winscreencap: Fixed using gst_structure_get_fraction when setting the framerate.
+
+winscreencap: Fixed the return value to NULL if the target display does not exist in the get_caps function.
+
+winscreencap: Fixed the definition from ENABLE_DXGI_CAP to HAVE_DXGI_CAP.
+
+winscreencap: Fixed C++-style comments to C-style.
+
+winscreencap: Add an empty line for each semantic.include directive optimization.
+
+winscreencap: Fixed a memory leak when enumerating IDXGIAdapter1.
+
+winscreencap: fix: remove unused variable
+
+winscreencap: Added HRESULT check when copying texture fragments.
+
+winscreencap: The dependent library of dxgiscreencapsrc is not required, so I changed it to 'required: false'.
+
+winscreencap: Fixed an issue with the IDXGIOutput leak.
+
+winscreencap: Changed dxgicap_acquire_next_frame return type to boolean.
+
+winscreencap: Remove unused code.
+
+winscreencap: The D3D object required only during initialization has been changed to a temporary object.
+
+winscreencap: Changed to define elements using G_DECLARE_FINAL_TYPE.
+
+winscreencap: Defined default values of properties and modified them so that they are referenced in 'class_init' and 'object_init'.
+
+winscreencap: Removed unnecessary new line.
+
+winscreencap: Moved the screen capture implementation from 'create' to 'fill'.
+
+winscreencap: Changed to use gst_video_frame_map when copying frame buffer.
+
+winscreencap: Moved '_GstDXGIScreenCapSrc' structure definition to gstdxgiscreencapsrc.c.
+
+winscreencap: Fixed the wrong email address.
+
+winscreencap: Fixed variable name when copying frame buffer.
+
+winscreencap: Add to debug log at FAILED (hr).
+
+winscreencap: Moved '_dxgicapture' structure definition to dxgicapture.c.
+
+winscreencap: Fix undefined error codes in msys.remove unused variables.
+
+winscreencap: Removed null check around g_free. Changed '_this' to 'self'.
+
+winscreencap: Added a comment to dxgicapture.c. And the variable name and function name are changed appropriately.
+---
+ sys/winscreencap/dxgicapture.c         | 1333 ++++++++++++++++++++++++
+ sys/winscreencap/dxgicapture.h         |   83 ++
+ sys/winscreencap/gstdxgiscreencapsrc.c |  561 ++++++++++
+ sys/winscreencap/gstdxgiscreencapsrc.h |   32 +
+ sys/winscreencap/gstwinscreencap.c     |   15 +-
+ sys/winscreencap/meson.build           |   30 +-
+ 6 files changed, 2050 insertions(+), 4 deletions(-)
+ create mode 100644 sys/winscreencap/dxgicapture.c
+ create mode 100644 sys/winscreencap/dxgicapture.h
+ create mode 100644 sys/winscreencap/gstdxgiscreencapsrc.c
+ create mode 100644 sys/winscreencap/gstdxgiscreencapsrc.h
+
+diff --git a/sys/winscreencap/dxgicapture.c b/sys/winscreencap/dxgicapture.c
+new file mode 100644
+index 0000000000..9cc7b67b5b
+--- /dev/null
++++ b/sys/winscreencap/dxgicapture.c
+@@ -0,0 +1,1333 @@
++/* GStreamer
++ * Copyright (C) 2019 OKADA Jun-ichi <okada@abt.jp>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/* This code captures the screen using "Desktop Duplication API".
++ * For more information 
++ * https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/desktop-dup-api */
++
++#include "dxgicapture.h"
++
++#include <d3dcompiler.h>
++#include <d3d9.h>
++
++#define PTR_RELEASE(p) {if(NULL!=(p)){IUnknown_Release((IUnknown *)(p)); (p) = NULL;}}
++#define BYTE_PER_PIXEL (4)
++
++/* vertex structures */
++typedef struct _vector3d
++{
++  float x;
++  float y;
++  float z;
++} vector3d;
++
++typedef struct _vector2d
++{
++  float x;
++  float y;
++} vector2d;
++
++typedef struct _vertex
++{
++  vector3d pos;
++  vector2d texcoord;
++} vertex;
++#define VERTEX_NUM (6);
++
++typedef struct _dxgicapture
++{
++  GstDXGIScreenCapSrc *src;
++
++  /*Direct3D pointers */
++  ID3D11Device *d3d11_device;
++  ID3D11DeviceContext *d3d11_context;
++  IDXGIOutputDuplication *dxgi_dupl;
++
++  /* Texture that has been rotated and combined fragments. */
++  ID3D11Texture2D *work_texture;
++  D3D11_TEXTURE2D_DESC work_texture_desc;
++  /* Working texture to copy the region
++     moved from the previous frame. 
++     This texture is necessary because partial copying cannot be performed 
++     between the same textures. */
++  ID3D11Texture2D *move_region_texture;
++  /* Textures that can be read by the CPU. 
++     CPU-accessible textures are required separately from work_texture 
++     because shaders cannot be executed. */
++  ID3D11Texture2D *readable_texture;
++  ID3D11VertexShader *vertex_shader;
++  ID3D11PixelShader *pixel_shader;
++  ID3D11SamplerState *sampler_state;
++  ID3D11RenderTargetView *target_view;
++  /* Screen output dimensions and rotation status.
++     The texture acquired by AcquireNextFrame has a non-rotated region. */
++  DXGI_OUTDUPL_DESC dupl_desc;
++
++  /* mouse pointer image */
++  guint8 *pointer_buffer;
++  gsize pointer_buffer_capacity;
++
++  /* The movement rectangular regions and the movement 
++     destination position from the previous frame. */
++  DXGI_OUTDUPL_MOVE_RECT *move_rects;
++  gsize move_rects_capacity;
++
++  /* Array of dirty rectangular region for the desktop frame. */
++  RECT *dirty_rects;
++  gsize dirty_rects_capacity;
++
++  /* Vertex buffer created from array of dirty rectangular region. */
++  vertex *dirty_verteces;
++  gsize verteces_capacity;
++
++  /* Array of rectangular region to copy to readable_texture. */
++  RECT *copy_rects;
++  gsize copy_rects_capacity;
++
++  /* latest mouse pointer info */
++  DXGI_OUTDUPL_POINTER_SHAPE_INFO pointer_shape_info;
++  DXGI_OUTDUPL_POINTER_POSITION last_pointer_position;
++
++} dxgicapture;
++
++/* Vertex shader for texture rotation by HLSL. */
++static const char STR_VERTEX_SHADER[] =
++    "struct vs_input  { float4 pos : POSITION; float2 tex : TEXCOORD; }; "
++    "struct vs_output { float4 pos : SV_POSITION; float2 tex : TEXCOORD; }; "
++    "vs_output vs_main(vs_input input){return input;}";
++
++/* Pixel shader for texture rotation by HLSL. */
++static const char STR_PIXEL_SHADER[] =
++    "Texture2D tx : register( t0 ); "
++    "SamplerState samp : register( s0 ); "
++    "struct ps_input { float4 pos : SV_POSITION; float2 tex : TEXCOORD;}; "
++    "float4 ps_main(ps_input input) : "
++    "SV_Target{ return tx.Sample( samp, input.tex ); }";
++
++/* initial buffer size */
++const int INITIAL_POINTER_BUFFER_CAPACITY = 64 * 64 * BYTE_PER_PIXEL;
++const int INITIAL_MOVE_RECTS_CAPACITY = 100;
++const int INITIAL_DIRTY_RECTS_CAPACITY = 100;
++const int INITIAL_VERTICES_CAPACITY = 100 * VERTEX_NUM;
++const int INITIAL_COPY_RECTS_CAPACITY = 100;
++
++static D3D_FEATURE_LEVEL feature_levels[] = {
++  D3D_FEATURE_LEVEL_11_0,
++  D3D_FEATURE_LEVEL_10_1,
++  D3D_FEATURE_LEVEL_10_0,
++  D3D_FEATURE_LEVEL_9_3,
++  D3D_FEATURE_LEVEL_9_2,
++  D3D_FEATURE_LEVEL_9_1,
++};
++
++const int countof_feature_levels =
++    sizeof (feature_levels) / sizeof (D3D_FEATURE_LEVEL);
++
++static D3D11_INPUT_ELEMENT_DESC vertex_layout[] = {
++  {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
++      D3D11_INPUT_PER_VERTEX_DATA, 0},
++  {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA,
++      0}
++};
++
++const int countof_vertex_layout =
++    sizeof (vertex_layout) / sizeof (D3D11_INPUT_ELEMENT_DESC);
++
++static void _draw_pointer (dxgicapture * self, LPBYTE buffer, LPRECT dst_rect,
++    int stride);
++static ID3D11Texture2D *_create_texture (dxgicapture * self,
++    enum D3D11_USAGE usage, UINT bindFlags, UINT cpuAccessFlags);
++
++static gboolean _setup_texture (dxgicapture * self);
++
++static HRESULT _update_work_texture (dxgicapture * self,
++    IDXGIResource * desktop_resource);
++
++static void _copy_move_fragment (dxgicapture * self, ID3D11Texture2D * texture,
++    const D3D11_TEXTURE2D_DESC * desc,
++    ID3D11Texture2D * move_texture, guint move_count, RECT ** dst_rect);
++
++static HRESULT _copy_dirty_fragment (dxgicapture * self,
++    ID3D11Texture2D * src_texture,
++    const D3D11_TEXTURE2D_DESC * src_desc, guint dirty_count, RECT ** dst_rect);
++
++static void _set_verteces (dxgicapture * self, vertex * verteces,
++    RECT * dest_rect, const D3D11_TEXTURE2D_DESC * dst_desc, RECT * rect,
++    const D3D11_TEXTURE2D_DESC * src_desc);
++
++dxgicapture *
++dxgicap_new (HMONITOR monitor, GstDXGIScreenCapSrc * src)
++{
++  int i, j;
++  HRESULT hr;
++  IDXGIFactory1 *dxgi_factory1 = NULL;
++  IDXGIOutput1 *dxgi_output1 = NULL;
++  IDXGIAdapter1 *dxgi_adapter1 = NULL;
++  ID3D11InputLayout *vertex_input_layout = NULL;
++  ID3DBlob *vertex_shader_blob = NULL;
++  ID3DBlob *pixel_shader_blob = NULL;
++  D3D11_SAMPLER_DESC sampler_desc;
++
++  dxgicapture *self = g_new0 (dxgicapture, 1);
++  if (NULL == self) {
++    return NULL;
++  }
++
++  self->src = src;
++  hr = CreateDXGIFactory1 (&IID_IDXGIFactory1, (void **) &dxgi_factory1);
++  HR_FAILED_GOTO (hr, CreateDXGIFactory1, new_error);
++
++  dxgi_output1 = NULL;
++  for (i = 0;
++      IDXGIFactory1_EnumAdapters1 (dxgi_factory1, i,
++          &dxgi_adapter1) != DXGI_ERROR_NOT_FOUND; ++i) {
++    IDXGIOutput *dxgi_output = NULL;
++    D3D_FEATURE_LEVEL feature_level;
++
++    hr = D3D11CreateDevice ((IDXGIAdapter *) dxgi_adapter1,
++        D3D_DRIVER_TYPE_UNKNOWN, NULL, 0,
++        feature_levels, countof_feature_levels,
++        D3D11_SDK_VERSION, &self->d3d11_device, &feature_level,
++        &self->d3d11_context);
++    if (FAILED (hr)) {
++      HR_FAILED_INFO (hr, D3D11CreateDevice);
++      PTR_RELEASE (dxgi_adapter1);
++      continue;
++    }
++
++    for (j = 0; IDXGIAdapter1_EnumOutputs (dxgi_adapter1, j, &dxgi_output) !=
++        DXGI_ERROR_NOT_FOUND; ++j) {
++      DXGI_OUTPUT_DESC output_desc;
++      hr = IDXGIOutput_QueryInterface (dxgi_output, &IID_IDXGIOutput1,
++          (void **) &dxgi_output1);
++      PTR_RELEASE (dxgi_output);
++      HR_FAILED_GOTO (hr, IDXGIOutput::QueryInterface, new_error);
++
++      hr = IDXGIOutput1_GetDesc (dxgi_output1, &output_desc);
++      HR_FAILED_GOTO (hr, IDXGIOutput1::GetDesc, new_error);
++
++      if (output_desc.Monitor == monitor) {
++        GST_DEBUG_OBJECT (src, "found monitor");
++        break;
++      }
++
++      PTR_RELEASE (dxgi_output1);
++      dxgi_output1 = NULL;
++    }
++
++    PTR_RELEASE (dxgi_adapter1);
++
++    if (NULL != dxgi_output1) {
++      break;
++    }
++
++    PTR_RELEASE (self->d3d11_device);
++    PTR_RELEASE (self->d3d11_context);
++  }
++
++  if (NULL == dxgi_output1) {
++    goto new_error;
++  }
++
++  PTR_RELEASE (dxgi_factory1);
++
++  hr = IDXGIOutput1_DuplicateOutput (dxgi_output1,
++      (IUnknown *) (self->d3d11_device), &self->dxgi_dupl);
++  PTR_RELEASE (dxgi_output1);
++  HR_FAILED_GOTO (hr, IDXGIOutput1::DuplicateOutput, new_error);
++
++  IDXGIOutputDuplication_GetDesc (self->dxgi_dupl, &self->dupl_desc);
++  self->pointer_buffer_capacity = INITIAL_POINTER_BUFFER_CAPACITY;
++  self->pointer_buffer = g_malloc (self->pointer_buffer_capacity);
++  if (NULL == self->pointer_buffer) {
++    goto new_error;
++  }
++
++  self->move_rects_capacity = INITIAL_MOVE_RECTS_CAPACITY;
++  self->move_rects = g_new0 (DXGI_OUTDUPL_MOVE_RECT, self->move_rects_capacity);
++  if (NULL == self->move_rects) {
++    goto new_error;
++  }
++
++  self->dirty_rects_capacity = INITIAL_DIRTY_RECTS_CAPACITY;
++  self->dirty_rects = g_new0 (RECT, self->dirty_rects_capacity);
++  if (NULL == self->dirty_rects) {
++    goto new_error;
++  }
++
++  self->verteces_capacity = INITIAL_VERTICES_CAPACITY;
++  self->dirty_verteces = g_new0 (vertex, self->verteces_capacity);
++  if (NULL == self->dirty_verteces) {
++    goto new_error;
++  }
++
++  self->copy_rects_capacity = INITIAL_COPY_RECTS_CAPACITY;
++  self->copy_rects = g_new0 (RECT, self->copy_rects_capacity);
++  if (NULL == self->copy_rects) {
++    goto new_error;
++  }
++
++  hr = D3DCompile (STR_VERTEX_SHADER, sizeof (STR_VERTEX_SHADER),
++      NULL, NULL, NULL, "vs_main", "vs_4_0_level_9_1",
++      0, 0, &vertex_shader_blob, NULL);
++  HR_FAILED_GOTO (hr, D3DCompile, new_error);
++
++  hr = D3DCompile (STR_PIXEL_SHADER, sizeof (STR_PIXEL_SHADER),
++      NULL, NULL, NULL, "ps_main", "ps_4_0_level_9_1",
++      0, 0, &pixel_shader_blob, NULL);
++  HR_FAILED_GOTO (hr, D3DCompile, new_error);
++
++  hr = ID3D11Device_CreateVertexShader (self->d3d11_device,
++      ID3D10Blob_GetBufferPointer (vertex_shader_blob),
++      ID3D10Blob_GetBufferSize (vertex_shader_blob), NULL,
++      &self->vertex_shader);
++  HR_FAILED_GOTO (hr, ID3D11Device::CreateVertexShader, new_error);
++
++  hr = ID3D11Device_CreateInputLayout (self->d3d11_device, vertex_layout,
++      countof_vertex_layout,
++      ID3D10Blob_GetBufferPointer (vertex_shader_blob),
++      ID3D10Blob_GetBufferSize (vertex_shader_blob), &vertex_input_layout);
++  PTR_RELEASE (vertex_shader_blob)
++      HR_FAILED_GOTO (hr, ID3D11Device::CreateInputLayout, new_error);
++
++  ID3D11DeviceContext_IASetInputLayout (self->d3d11_context,
++      vertex_input_layout);
++  PTR_RELEASE (vertex_input_layout);
++
++  hr = ID3D11Device_CreatePixelShader (self->d3d11_device,
++      ID3D10Blob_GetBufferPointer (pixel_shader_blob),
++      ID3D10Blob_GetBufferSize (pixel_shader_blob), NULL, &self->pixel_shader);
++  PTR_RELEASE (pixel_shader_blob);
++  HR_FAILED_GOTO (hr, ID3D11Device::CreatePixelShader, new_error);
++
++  memset (&sampler_desc, 0, sizeof sampler_desc);
++  sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
++  sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
++  sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
++  sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
++  sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
++  sampler_desc.MinLOD = 0;
++  sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
++
++  hr = ID3D11Device_CreateSamplerState (self->d3d11_device, &sampler_desc,
++      &self->sampler_state);
++  HR_FAILED_GOTO (hr, ID3D11Device::CreateSamplerState, new_error);
++
++  return self;
++
++new_error:
++  PTR_RELEASE (vertex_input_layout);
++  PTR_RELEASE (vertex_shader_blob);
++  PTR_RELEASE (pixel_shader_blob);
++
++  dxgicap_destory (self);
++  return NULL;
++}
++
++void
++dxgicap_destory (dxgicapture * self)
++{
++  if (NULL != self) {
++    PTR_RELEASE (self->target_view);
++    PTR_RELEASE (self->readable_texture);
++    PTR_RELEASE (self->work_texture);
++    PTR_RELEASE (self->move_region_texture);
++    PTR_RELEASE (self->dxgi_dupl);
++    PTR_RELEASE (self->d3d11_context);
++    PTR_RELEASE (self->d3d11_device);
++    PTR_RELEASE (self->vertex_shader);
++    PTR_RELEASE (self->pixel_shader);
++    PTR_RELEASE (self->sampler_state);
++
++    g_free (self->pointer_buffer);
++    g_free (self->move_rects);
++    g_free (self->dirty_rects);
++    g_free (self->dirty_verteces);
++    g_free (self->copy_rects);
++
++    g_free (self);
++  }
++}
++
++gboolean
++dxgicap_start (dxgicapture * self)
++{
++  return _setup_texture (self);
++}
++
++void
++dxgicap_stop (dxgicapture * self)
++{
++  PTR_RELEASE (self->target_view);
++  PTR_RELEASE (self->readable_texture);
++  PTR_RELEASE (self->work_texture);
++  PTR_RELEASE (self->move_region_texture);
++}
++
++gboolean
++dxgicap_acquire_next_frame (dxgicapture * self, gboolean show_cursor,
++    guint timeout)
++{
++  gboolean ret = FALSE;
++  HRESULT hr;
++  GstDXGIScreenCapSrc *src = self->src;
++
++  DXGI_OUTDUPL_FRAME_INFO frame_info;
++  IDXGIResource *desktop_resource = NULL;
++
++  /* Get the latest desktop frames. */
++  hr = IDXGIOutputDuplication_AcquireNextFrame (self->dxgi_dupl,
++      timeout, &frame_info, &desktop_resource);
++  if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
++    /* In case of DXGI_ERROR_WAIT_TIMEOUT, 
++       it has not changed from the last time. */
++    GST_LOG_OBJECT (src, "DXGI_ERROR_WAIT_TIMEOUT");
++    ret = TRUE;
++    goto end;
++  }
++  HR_FAILED_GOTO (hr, IDXGIOutputDuplication::AcquireNextFrame, end);
++
++  if (0 != frame_info.LastPresentTime.QuadPart) {
++    /* The desktop frame has changed since last time. */
++    hr = _update_work_texture (self, desktop_resource);
++    if (FAILED (hr)) {
++      GST_DEBUG_OBJECT (src, "failed to _update_work_texture");
++      goto end;
++    }
++  }
++
++  if (show_cursor && 0 != frame_info.LastMouseUpdateTime.QuadPart) {
++    /* The mouse pointer has changed since last time. */
++    self->last_pointer_position = frame_info.PointerPosition;
++
++    if (0 < frame_info.PointerShapeBufferSize) {
++      /* A valid mouse cursor shape exists. */
++      DXGI_OUTDUPL_POINTER_SHAPE_INFO pointer_shape_info;
++      guint pointer_shape_size_required;
++      /* Get the mouse cursor shape. */
++      hr = IDXGIOutputDuplication_GetFramePointerShape (self->dxgi_dupl,
++          self->pointer_buffer_capacity,
++          self->pointer_buffer,
++          &pointer_shape_size_required, &pointer_shape_info);
++      if (DXGI_ERROR_MORE_DATA == hr) {
++        /* not enough buffers */
++        g_free (self->pointer_buffer);
++        self->pointer_buffer_capacity = pointer_shape_size_required * 2;
++        self->pointer_buffer = g_malloc (self->pointer_buffer_capacity);
++
++        hr = IDXGIOutputDuplication_GetFramePointerShape (self->dxgi_dupl,
++            self->pointer_buffer_capacity,
++            self->pointer_buffer,
++            &pointer_shape_size_required, &pointer_shape_info);
++      }
++      HR_FAILED_GOTO (hr, IDXGIOutputDuplication::GetFramePointerShape, end);
++      self->pointer_shape_info = pointer_shape_info;
++      ret = TRUE;
++    } else {
++      ret = TRUE;
++    }
++  } else {
++    ret = TRUE;
++  }
++end:
++  IDXGIOutputDuplication_ReleaseFrame (self->dxgi_dupl);
++  PTR_RELEASE (desktop_resource);
++  return ret;
++}
++
++gboolean
++dxgicap_copy_buffer (dxgicapture * self, gboolean show_cursor, LPRECT dst_rect,
++    GstVideoInfo * video_info, GstBuffer * buf)
++{
++  HRESULT hr;
++  int i;
++  GstDXGIScreenCapSrc *src = self->src;
++  IDXGISurface1 *readable_surface = NULL;
++  DXGI_MAPPED_RECT readable_surface_map;
++  GstVideoFrame vframe;
++  gint height = RECT_HEIGHT ((*dst_rect));
++  gint width = RECT_WIDTH ((*dst_rect));
++
++  if (NULL == self->readable_texture) {
++    GST_DEBUG_OBJECT (src, "readable_texture is null");
++    goto flow_error;
++  }
++
++  hr = ID3D11Texture2D_QueryInterface (self->readable_texture,
++      &IID_IDXGISurface1, (void **) &readable_surface);
++  HR_FAILED_GOTO (hr, ID3D11Texture2D::QueryInterface, flow_error);
++
++  hr = IDXGISurface1_Map (readable_surface, &readable_surface_map,
++      DXGI_MAP_READ);
++  HR_FAILED_GOTO (hr, IDXGISurface1::Map, flow_error);
++
++  GST_DEBUG_OBJECT (src, "copy size width:%d height:%d", width, height);
++
++  /* Copy from readable_texture to GstVideFrame. */
++  if (gst_video_frame_map (&vframe, video_info, buf, GST_MAP_WRITE)) {
++    gint line_size;
++    gint stride_dst;
++    PBYTE frame_buffer;
++    PBYTE p_dst;
++    PBYTE p_src;
++
++    frame_buffer = GST_VIDEO_FRAME_PLANE_DATA (&vframe, 0);
++    p_src = (PBYTE) readable_surface_map.pBits +
++        (dst_rect->top * readable_surface_map.Pitch) +
++        (dst_rect->left * BYTE_PER_PIXEL);
++    p_dst = frame_buffer;
++
++    line_size = width * BYTE_PER_PIXEL;
++    stride_dst = GST_VIDEO_FRAME_PLANE_STRIDE (&vframe, 0);
++
++    if (line_size > stride_dst) {
++      GST_ERROR_OBJECT (src, "not enough stride in video frame");
++      gst_video_frame_unmap (&vframe);
++      goto flow_error;
++    }
++
++    for (i = 0; i < height; ++i) {
++      memcpy (p_dst, p_src, line_size);
++      p_dst += stride_dst;
++      p_src += readable_surface_map.Pitch;
++    }
++    hr = IDXGISurface1_Unmap (readable_surface);
++    HR_FAILED_GOTO (hr, IDXGISurface1::Unmap, flow_error);
++
++    PTR_RELEASE (readable_surface);
++
++    if (show_cursor && self->last_pointer_position.Visible) {
++      _draw_pointer (self, frame_buffer, dst_rect, stride_dst);
++    }
++    gst_video_frame_unmap (&vframe);
++    return TRUE;
++  }
++
++flow_error:
++  PTR_RELEASE (readable_surface);
++  return FALSE;
++}
++
++static void
++_draw_pointer (dxgicapture * self, PBYTE buffer, LPRECT dst_rect, int stride)
++{
++  RECT pointer_rect;
++  RECT clip_pointer_rect;
++
++  int pointer_height =
++      (DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME ==
++      self->pointer_shape_info.Type)
++      ? self->pointer_shape_info.Height / 2 : self->pointer_shape_info.Height;
++
++  /* A rectangular area containing the mouse pointer shape */
++  SetRect (&pointer_rect,
++      self->last_pointer_position.Position.x,
++      self->last_pointer_position.Position.y,
++      self->last_pointer_position.Position.x +
++      self->pointer_shape_info.Width,
++      self->last_pointer_position.Position.y + pointer_height);
++
++  if (IntersectRect (&clip_pointer_rect, dst_rect, &pointer_rect)) {
++    /* Draw a pointer if it overlaps the destination rectangle range. */
++    int offset_x = clip_pointer_rect.left - pointer_rect.left;
++    int offset_y = clip_pointer_rect.top - pointer_rect.top;
++
++    PBYTE p_dst =
++        ((PBYTE) buffer) + ((clip_pointer_rect.top -
++            dst_rect->top) * stride) +
++        ((clip_pointer_rect.left - dst_rect->left) * BYTE_PER_PIXEL);
++
++    if (DXGI_OUTDUPL_POINTER_SHAPE_TYPE_COLOR ==
++        self->pointer_shape_info.Type
++        || DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MASKED_COLOR ==
++        self->pointer_shape_info.Type) {
++
++      gboolean mask_mode =
++          DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MASKED_COLOR ==
++          self->pointer_shape_info.Type;
++      PBYTE p_src =
++          (PBYTE) self->pointer_buffer +
++          (offset_y * self->pointer_shape_info.Pitch) +
++          (offset_x * BYTE_PER_PIXEL);
++
++      int y, x;
++      for (y = 0; y < RECT_HEIGHT (clip_pointer_rect); ++y) {
++        for (x = 0; x < RECT_WIDTH (clip_pointer_rect); ++x) {
++          PBYTE p1 = p_dst + (x * BYTE_PER_PIXEL);
++          PBYTE p2 = p_src + (x * BYTE_PER_PIXEL);
++          int alpha = *(p2 + 3);
++          int i;
++          for (i = 0; i < 3; ++i) {
++            if (mask_mode) {
++              if (0 == alpha) {
++                *p1 = *p2;
++              } else {
++                *p1 = *p2 ^ *p1;
++              }
++            } else {
++              *p1 = min (255, max (0, *p1 + ((*p2 - *p1) * alpha / 255)));
++            }
++            ++p1;
++            ++p2;
++          }
++        }
++        p_dst += stride;
++        p_src += self->pointer_shape_info.Pitch;
++      }
++
++    } else if (DXGI_OUTDUPL_POINTER_SHAPE_TYPE_MONOCHROME ==
++        self->pointer_shape_info.Type) {
++      guint mask_bit = 0x80;
++      PBYTE p_src_and =
++          (PBYTE) self->pointer_buffer +
++          (offset_y * self->pointer_shape_info.Pitch);
++      PBYTE p_src_xor =
++          (PBYTE) self->pointer_buffer +
++          ((offset_y + pointer_height) * self->pointer_shape_info.Pitch);
++
++      int y, x;
++      for (y = 0; y < RECT_HEIGHT (clip_pointer_rect); ++y) {
++        guint32 *p_dst_32 = ((guint32 *) (p_dst));
++        for (x = offset_x; x < RECT_WIDTH (clip_pointer_rect); ++x) {
++          int bit_pos = x % 8;
++          gboolean and_bit =
++              0 != (*(p_src_and + (x / 8)) & (mask_bit >> bit_pos));
++          gboolean xor_bit =
++              0 != (*(p_src_xor + (x / 8)) & (mask_bit >> bit_pos));
++
++          if (and_bit) {
++            if (xor_bit) {
++              *p_dst_32 = *p_dst_32 ^ 0x00ffffff;
++            }
++          } else {
++            if (xor_bit) {
++              *p_dst_32 = 0xffffffff;
++            } else {
++              *p_dst_32 = 0xff000000;
++            }
++          }
++          ++p_dst_32;
++        }
++        p_dst += stride;
++        p_src_and += self->pointer_shape_info.Pitch;
++        p_src_xor += self->pointer_shape_info.Pitch;
++      }
++    }
++  }
++}
++
++
++static ID3D11Texture2D *
++_create_texture (dxgicapture * self,
++    enum D3D11_USAGE usage, UINT bindFlags, UINT cpuAccessFlags)
++{
++  HRESULT hr;
++  GstDXGIScreenCapSrc *src = self->src;
++  D3D11_TEXTURE2D_DESC new_desc;
++  ID3D11Texture2D *new_texture = NULL;
++
++  ZeroMemory (&new_desc, sizeof (new_desc));
++  new_desc.Width = self->dupl_desc.ModeDesc.Width;
++  new_desc.Height = self->dupl_desc.ModeDesc.Height;
++  new_desc.MipLevels = 1;
++  new_desc.ArraySize = 1;
++  new_desc.SampleDesc.Count = 1;
++  new_desc.SampleDesc.Quality = 0;
++  new_desc.Usage = usage;
++  new_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
++  new_desc.BindFlags = bindFlags;
++  new_desc.CPUAccessFlags = cpuAccessFlags;
++  new_desc.MiscFlags = 0;
++
++  hr = ID3D11Device_CreateTexture2D (self->d3d11_device, &new_desc, NULL,
++      &new_texture);
++  HR_FAILED_RET (hr, ID3D11Device::CreateTexture2D, NULL);
++
++  return new_texture;
++}
++
++static gboolean
++_setup_texture (dxgicapture * self)
++{
++  HRESULT hr;
++  ID3D11Texture2D *new_texture = NULL;
++  GstDXGIScreenCapSrc *src = self->src;
++
++  if (NULL == self->readable_texture) {
++    new_texture = _create_texture (self, D3D11_USAGE_STAGING, 0,
++        D3D11_CPU_ACCESS_READ);
++    if (NULL == new_texture) {
++      return FALSE;
++    }
++    self->readable_texture = new_texture;
++  }
++
++  if (NULL == self->work_texture) {
++    new_texture =
++        _create_texture (self, D3D11_USAGE_DEFAULT,
++        D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, 0);
++    if (NULL == new_texture) {
++      return FALSE;
++    }
++
++    self->work_texture = new_texture;
++    ID3D11Texture2D_GetDesc (self->work_texture, &self->work_texture_desc);
++    hr = ID3D11Device_CreateRenderTargetView (self->d3d11_device,
++        (ID3D11Resource *) self->work_texture, NULL, &self->target_view);
++    HR_FAILED_RET (hr, ID3D11Device::CreateRenderTargetView, FALSE);
++  }
++
++  if (NULL == self->move_region_texture) {
++    new_texture = _create_texture (self, D3D11_USAGE_DEFAULT, 0, 0);
++    if (NULL == new_texture) {
++      return FALSE;
++    }
++
++    self->move_region_texture = new_texture;
++  }
++
++  return TRUE;
++}
++
++/*
++ * Update work_texture to the latest desktop frame from the update information 
++ * that can be obtained from IDXGIOutputDuplication.
++ * Then copy to readable_texture.
++ */
++static HRESULT
++_update_work_texture (dxgicapture * self, IDXGIResource * desktop_resource)
++{
++  HRESULT hr = S_OK;
++  GstDXGIScreenCapSrc *src = self->src;
++  int i;
++  ID3D11Texture2D *desktop_texture = NULL;
++  guint required_size;
++  guint move_count;
++  guint dirty_rects_capacity_size;
++  guint dirty_count;
++  guint copy_count;
++  D3D11_TEXTURE2D_DESC src_desc;
++  RECT *dst_rect;
++  guint move_rects_capacity_size =
++      sizeof (DXGI_OUTDUPL_MOVE_RECT) * self->move_rects_capacity;
++
++  hr = IDXGIResource_QueryInterface (desktop_resource, &IID_ID3D11Texture2D,
++      (void **) &desktop_texture);
++  HR_FAILED_GOTO (hr, IDXGIResource::QueryInterface, end);
++
++  /* Get the rectangular regions that was moved from the last time. 
++     However, I have never obtained a valid value in GetFrameMoveRects.
++     It seems to depend on the implementation of the GPU driver.
++     see https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgioutputduplication-getframemoverects
++   */
++  hr = IDXGIOutputDuplication_GetFrameMoveRects (self->dxgi_dupl,
++      move_rects_capacity_size, self->move_rects, &required_size);
++  if (DXGI_ERROR_MORE_DATA == hr) {
++    /* not enough buffers */
++    g_free (self->move_rects);
++    self->move_rects_capacity =
++        (required_size / sizeof (DXGI_OUTDUPL_MOVE_RECT)) * 2;
++    self->move_rects =
++        g_new0 (DXGI_OUTDUPL_MOVE_RECT, self->move_rects_capacity);
++
++    hr = IDXGIOutputDuplication_GetFrameMoveRects (self->dxgi_dupl,
++        required_size, self->move_rects, &required_size);
++  }
++  HR_FAILED_GOTO (hr, IDXGIOutputDuplication::GetFrameMoveRects, end);
++
++  move_count = required_size / sizeof (DXGI_OUTDUPL_MOVE_RECT);
++  dirty_rects_capacity_size =
++      sizeof (DXGI_OUTDUPL_MOVE_RECT) * self->move_rects_capacity;
++  dirty_rects_capacity_size = sizeof (RECT) * self->dirty_rects_capacity;
++
++  /* Gets the rectangular regions that has changed since the last time. 
++     see https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgioutputduplication-getframedirtyrects 
++   */
++  hr = IDXGIOutputDuplication_GetFrameDirtyRects (self->dxgi_dupl,
++      dirty_rects_capacity_size, self->dirty_rects, &required_size);
++
++  if (DXGI_ERROR_MORE_DATA == hr) {
++    /* not enough buffers */
++    g_free (self->dirty_rects);
++    self->dirty_rects_capacity = (required_size / sizeof (RECT)) * 2;
++    self->dirty_rects = g_new0 (RECT, self->dirty_rects_capacity);
++
++    hr = IDXGIOutputDuplication_GetFrameDirtyRects (self->dxgi_dupl,
++        required_size, self->dirty_rects, &required_size);
++  }
++  HR_FAILED_GOTO (hr, IDXGIOutputDuplication::GetFrameDirtyRects, end);
++
++  dirty_count = required_size / sizeof (RECT);
++  /* The number of rectangular regions to copy to the retable_texture.
++     move_count is doubled because both the source and destination are required. */
++  copy_count = (move_count * 2) + dirty_count;
++
++  if (self->copy_rects_capacity < copy_count) {
++    /* not enough buffers */
++    self->copy_rects_capacity = copy_count * 2;
++    g_free (self->copy_rects);
++    self->copy_rects = g_new0 (RECT, self->copy_rects_capacity);
++  }
++
++  ID3D11Texture2D_GetDesc (desktop_texture, &src_desc);
++  dst_rect = self->copy_rects;
++
++  /* Copy the moving rectangular regions in work_texture. */
++  _copy_move_fragment (self, self->work_texture, &self->work_texture_desc,
++      self->move_region_texture, move_count, &dst_rect);
++
++  /* Copy the dirty rectangular regions from desktop frame to work_texture. */
++  hr = _copy_dirty_fragment (self, desktop_texture, &src_desc, dirty_count,
++      &dst_rect);
++  if (FAILED (hr)) {
++    goto end;
++  }
++
++  /* Copy the updated rectangular regions to readable_texture. */
++  for (i = 0; i < copy_count; ++i) {
++    RECT *p = (self->copy_rects + i);
++    D3D11_BOX box;
++    box.left = p->left;
++    box.top = p->top;
++    box.front = 0;
++    box.right = p->right;
++    box.bottom = p->bottom;
++    box.back = 1;
++
++    ID3D11DeviceContext_CopySubresourceRegion (self->d3d11_context,
++        (ID3D11Resource *) self->readable_texture,
++        0, p->left, p->top, 0, (ID3D11Resource *) self->work_texture, 0, &box);
++  }
++
++end:
++  PTR_RELEASE (desktop_texture);
++  return hr;
++}
++
++static void
++_rotate_rect (DXGI_MODE_ROTATION rotation, RECT * dst, const RECT * src,
++    gint dst_width, gint dst_height)
++{
++  switch (rotation) {
++    case DXGI_MODE_ROTATION_ROTATE90:
++      dst->left = dst_width - src->bottom;
++      dst->top = src->left;
++      dst->right = dst_width - src->top;
++      dst->bottom = src->right;
++      break;
++    case DXGI_MODE_ROTATION_ROTATE180:
++      dst->left = dst_width - src->right;
++      dst->top = dst_height - src->bottom;
++      dst->right = dst_width - src->left;
++      dst->bottom = dst_height - src->top;
++      break;
++    case DXGI_MODE_ROTATION_ROTATE270:
++      dst->left = src->top;
++      dst->top = dst_height - src->right;
++      dst->right = src->bottom;
++      dst->bottom = dst_height - src->left;
++      break;
++    default:
++      *dst = *src;
++      break;
++  }
++}
++
++static void
++_copy_move_fragment (dxgicapture * self, ID3D11Texture2D * texture,
++    const D3D11_TEXTURE2D_DESC * desc, ID3D11Texture2D * move_texture,
++    guint move_count, RECT ** dst_rect)
++{
++  int i;
++  RECT *dst_rect_p = *dst_rect;
++  DXGI_OUTDUPL_MOVE_RECT *p = self->move_rects;
++
++  for (i = 0; i < move_count; ++i) {
++    RECT src_rect;
++    RECT rotated_src;
++    RECT rotated_dst;
++    D3D11_BOX box;
++    /* Create a rectangular area from which to move. */
++    SetRect (&src_rect, p->SourcePoint.x, p->SourcePoint.y,
++        p->SourcePoint.x + RECT_WIDTH (p->DestinationRect),
++        p->SourcePoint.y + RECT_HEIGHT (p->DestinationRect));
++    /* Rectangular area is moved according to the rotation state of the display. */
++    _rotate_rect (self->dupl_desc.Rotation, &rotated_src, &src_rect,
++        desc->Width, desc->Height);
++    _rotate_rect (self->dupl_desc.Rotation, &rotated_dst, &p->DestinationRect,
++        desc->Width, desc->Height);
++
++    box.left = rotated_src.left;
++    box.top = rotated_src.top;
++    box.front = 0;
++    box.right = rotated_src.right;
++    box.bottom = rotated_src.bottom;
++    box.back = 1;
++    /* Copy to move_texture 
++       because partial copy is not possible between the same textures. */
++    ID3D11DeviceContext_CopySubresourceRegion (self->d3d11_context,
++        (ID3D11Resource *) move_texture, 0, rotated_dst.left, rotated_dst.top,
++        0, (ID3D11Resource *) texture, 0, &box);
++
++    box.left = rotated_dst.left;
++    box.top = rotated_dst.top;
++    box.front = 0;
++    box.right = rotated_dst.right;
++    box.bottom = rotated_dst.bottom;
++    box.back = 1;
++    /* Copy the region temporarily copied to move_texture to the destination. */
++    ID3D11DeviceContext_CopySubresourceRegion (self->d3d11_context,
++        (ID3D11Resource *) texture, 0, rotated_dst.left, rotated_dst.top, 0,
++        (ID3D11Resource *) move_texture, 0, &box);
++
++    /* Add a rectangular region to be copied to readable_texture. 
++       Both source and destination are required. */
++    ++p;
++    *dst_rect_p = rotated_src;
++    ++dst_rect_p;
++    *dst_rect_p = rotated_dst;
++    ++dst_rect_p;
++  }
++  *dst_rect = dst_rect_p;
++}
++
++/*
++ * Copy the rectangular area specified by dirty_rects from src_texture to work_texture.
++ */
++static HRESULT
++_copy_dirty_fragment (dxgicapture * self, ID3D11Texture2D * src_texture,
++    const D3D11_TEXTURE2D_DESC * src_desc, guint dirty_count, RECT ** dst_rect)
++{
++  HRESULT hr = S_OK;
++  GstDXGIScreenCapSrc *src = self->src;
++  int i;
++  RECT *dst_rect_p;
++  vertex *vp;
++  UINT stride;
++  UINT offset;
++  float blend[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
++  guint verteces_count;
++  D3D11_VIEWPORT view_port;
++  ID3D11Buffer *verteces_buffer = NULL;
++  ID3D11ShaderResourceView *shader_resource = NULL;
++  D3D11_SUBRESOURCE_DATA subresource_data;
++  D3D11_BUFFER_DESC buffer_desc;
++  D3D11_SHADER_RESOURCE_VIEW_DESC shader_desc;
++
++  shader_desc.Format = src_desc->Format;
++  shader_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
++  shader_desc.Texture2D.MostDetailedMip = src_desc->MipLevels - 1;
++  shader_desc.Texture2D.MipLevels = src_desc->MipLevels;
++  hr = ID3D11Device_CreateShaderResourceView (self->d3d11_device,
++      (ID3D11Resource *) src_texture, &shader_desc, &shader_resource);
++  HR_FAILED_GOTO (hr, ID3D11Device::CreateShaderResourceView, end);
++
++  ID3D11DeviceContext_OMSetBlendState (self->d3d11_context, NULL, blend,
++      0xffffffff);
++
++  ID3D11DeviceContext_OMSetRenderTargets (self->d3d11_context, 1,
++      &self->target_view, NULL);
++
++  ID3D11DeviceContext_VSSetShader (self->d3d11_context, self->vertex_shader,
++      NULL, 0);
++
++  ID3D11DeviceContext_PSSetShader (self->d3d11_context, self->pixel_shader,
++      NULL, 0);
++
++  ID3D11DeviceContext_PSSetShaderResources (self->d3d11_context, 0, 1,
++      &shader_resource);
++
++  ID3D11DeviceContext_PSSetSamplers (self->d3d11_context, 0, 1,
++      &self->sampler_state);
++
++  ID3D11DeviceContext_IASetPrimitiveTopology (self->d3d11_context,
++      D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
++
++  verteces_count = dirty_count * VERTEX_NUM;
++  if (verteces_count > self->verteces_capacity) {
++    /* not enough buffers */
++    g_free (self->dirty_verteces);
++    self->verteces_capacity = verteces_count * 2;
++    self->dirty_verteces = g_new0 (vertex, self->verteces_capacity);
++    if (NULL == self->dirty_verteces) {
++      hr = S_FALSE;
++      goto end;
++    }
++  }
++
++  dst_rect_p = *dst_rect;
++  vp = self->dirty_verteces;
++  /* Create a vertex buffer to move and rotate from the dirty_rects.
++     And set the rectangular region to be copied to readable_texture. */
++  for (i = 0; i < dirty_count; ++i) {
++    _set_verteces (self, vp, dst_rect_p, &self->work_texture_desc,
++        &(self->dirty_rects[i]), src_desc);
++    vp += VERTEX_NUM;
++    ++dst_rect_p;
++  }
++  *dst_rect = dst_rect_p;
++
++  memset (&buffer_desc, 0, sizeof (buffer_desc));
++  buffer_desc.Usage = D3D11_USAGE_DEFAULT;
++  buffer_desc.ByteWidth = verteces_count * sizeof (vertex);
++  buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
++  buffer_desc.CPUAccessFlags = 0;
++
++  memset (&subresource_data, 0, sizeof (subresource_data));
++  subresource_data.pSysMem = self->dirty_verteces;
++
++  hr = ID3D11Device_CreateBuffer (self->d3d11_device, &buffer_desc,
++      &subresource_data, &verteces_buffer);
++  HR_FAILED_GOTO (hr, ID3D11Device::CreateBuffer, end);
++
++  stride = sizeof (vertex);
++  offset = 0;
++  ID3D11DeviceContext_IASetVertexBuffers (self->d3d11_context, 0, 1,
++      &verteces_buffer, &stride, &offset);
++
++  view_port.Width = (float) self->work_texture_desc.Width;
++  view_port.Height = (float) self->work_texture_desc.Height;
++  view_port.MinDepth = 0.0f;
++  view_port.MaxDepth = 1.0f;
++  view_port.TopLeftX = 0.0f;
++  view_port.TopLeftY = 0.0f;
++  ID3D11DeviceContext_RSSetViewports (self->d3d11_context, 1, &view_port);
++
++  /* Copy the rectangular region indicated by dirty_rects from the desktop frame to work_texture. */
++  ID3D11DeviceContext_Draw (self->d3d11_context, verteces_count, 0);
++
++end:
++  PTR_RELEASE (verteces_buffer);
++  PTR_RELEASE (shader_resource);
++
++  return hr;
++}
++
++static void
++_set_verteces (dxgicapture * self, vertex * verteces, RECT * dst_rect,
++    const D3D11_TEXTURE2D_DESC * dst_desc, RECT * rect,
++    const D3D11_TEXTURE2D_DESC * src_desc)
++{
++  int center_x;
++  int center_y;
++
++  /* Rectangular area is moved according to the rotation of the display. */
++  _rotate_rect (self->dupl_desc.Rotation, dst_rect, rect, dst_desc->Width,
++      dst_desc->Height);
++
++  /* Set the vertex buffer from the rotation of the display. */
++  switch (self->dupl_desc.Rotation) {
++    case DXGI_MODE_ROTATION_ROTATE90:
++    verteces[0].texcoord = (vector2d) {
++    (float) rect->right / (float) src_desc->Width,
++          (float) rect->bottom / (float) src_desc->Height};
++      verteces[1].texcoord = (vector2d) {
++      (float) rect->left / (float) src_desc->Width,
++            (float) rect->bottom / (float) src_desc->Height};
++      verteces[2].texcoord = (vector2d) {
++      (float) rect->right / (float) src_desc->Width,
++            (float) rect->top / (float) src_desc->Height};
++      verteces[5].texcoord = (vector2d) {
++      (float) rect->left / (float) src_desc->Width,
++            (float) rect->top / (float) src_desc->Height};
++      break;
++    case DXGI_MODE_ROTATION_ROTATE180:
++    verteces[0].texcoord = (vector2d) {
++    (float) rect->right / (float) src_desc->Width,
++          (float) rect->top / (float) src_desc->Height};
++      verteces[1].texcoord = (vector2d) {
++      (float) rect->right / (float) src_desc->Width,
++            (float) rect->bottom / (float) src_desc->Height};
++      verteces[2].texcoord = (vector2d) {
++      (float) rect->left / (float) src_desc->Width,
++            (float) rect->top / (float) src_desc->Height};
++      verteces[5].texcoord = (vector2d) {
++      (float) rect->left / (float) src_desc->Width,
++            (float) rect->bottom / (float) src_desc->Height};
++      break;
++    case DXGI_MODE_ROTATION_ROTATE270:
++    verteces[0].texcoord = (vector2d) {
++    (float) rect->left / (float) src_desc->Width,
++          (float) rect->top / (float) src_desc->Height};
++      verteces[1].texcoord = (vector2d) {
++      (float) rect->right / (float) src_desc->Width,
++            (float) rect->top / (float) src_desc->Height};
++      verteces[2].texcoord = (vector2d) {
++      (float) rect->left / (float) src_desc->Width,
++            (float) rect->bottom / (float) src_desc->Height};
++      verteces[5].texcoord = (vector2d) {
++      (float) rect->right / (float) src_desc->Width,
++            (float) rect->bottom / (float) src_desc->Height};
++      break;
++    default:
++    verteces[0].texcoord = (vector2d) {
++    (float) rect->left / (float) src_desc->Width,
++          (float) rect->bottom / (float) src_desc->Height};
++      verteces[1].texcoord = (vector2d) {
++      (float) rect->left / (float) src_desc->Width,
++            (float) rect->top / (float) src_desc->Height};
++      verteces[2].texcoord = (vector2d) {
++      (float) rect->right / (float) src_desc->Width,
++            (float) rect->bottom / (float) src_desc->Height};
++      verteces[5].texcoord = (vector2d) {
++      (float) rect->right / (float) src_desc->Width,
++            (float) rect->top / (float) src_desc->Height};
++      break;
++  }
++  verteces[3].texcoord = verteces[2].texcoord;
++  verteces[4].texcoord = verteces[1].texcoord;
++
++  center_x = (int) dst_desc->Width / 2;
++  center_y = (int) dst_desc->Height / 2;
++
++  verteces[0].pos = (vector3d) {
++  (float) (dst_rect->left - center_x) / (float) center_x,
++        (float) (dst_rect->bottom - center_y) / (float) center_y *-1.0f, 0.0f};
++  verteces[1].pos = (vector3d) {
++  (float) (dst_rect->left - center_x) / (float) center_x,
++        (float) (dst_rect->top - center_y) / (float) center_y *-1.0f, 0.0f};
++  verteces[2].pos = (vector3d) {
++  (float) (dst_rect->right - center_x) / (float) center_x,
++        (float) (dst_rect->bottom - center_y) / (float) center_y *-1.0f, 0.0f};
++  verteces[3].pos = verteces[2].pos;
++  verteces[4].pos = verteces[1].pos;
++  verteces[5].pos = (vector3d) {
++  (float) (dst_rect->right - center_x) / (float) center_x,
++        (float) (dst_rect->top - center_y) / (float) center_y *-1.0f, 0.0f};
++}
++
++typedef struct _monitor_param
++{
++  const gchar *device_name;
++  HMONITOR hmonitor;
++} monitor_param;
++
++static BOOL CALLBACK
++monitor_enum_proc (HMONITOR hmonitor, HDC hdc, LPRECT rect, LPARAM lparam)
++{
++  MONITORINFOEXA monitor_info;
++  monitor_param *param = (monitor_param *) lparam;
++
++  monitor_info.cbSize = sizeof (monitor_info);
++  if (GetMonitorInfoA (hmonitor, (MONITORINFO *) & monitor_info)) {
++    if (0 == g_strcmp0 (monitor_info.szDevice, param->device_name)) {
++      param->hmonitor = hmonitor;
++      return FALSE;
++    }
++  }
++  return TRUE;
++}
++
++HMONITOR
++get_hmonitor_by_device_name (const gchar * device_name)
++{
++  monitor_param monitor = { device_name, NULL, };
++  EnumDisplayMonitors (NULL, NULL, monitor_enum_proc, (LPARAM) & monitor);
++  return monitor.hmonitor;
++}
++
++HMONITOR
++get_hmonitor_from_d3d9 (UINT adapter_number)
++{
++  HMONITOR hmonitor = NULL;
++  IDirect3D9 *d3d9 = Direct3DCreate9 (D3D_SDK_VERSION);
++
++  if (NULL == d3d9) {
++    return NULL;
++  }
++
++  if (adapter_number >= IDirect3D9_GetAdapterCount (d3d9)) {
++    IDirect3D9_Release (d3d9);
++    return NULL;
++  }
++
++  hmonitor = IDirect3D9_GetAdapterMonitor (d3d9, adapter_number);
++  IDirect3D9_Release (d3d9);
++  return hmonitor;
++}
++
++gboolean
++get_monitor_physical_size (HMONITOR hmonitor, LPRECT rect)
++{
++  MONITORINFOEXW monitor_info;
++  DEVMODEW dev_mode;
++
++  monitor_info.cbSize = sizeof (monitor_info);
++  if (!GetMonitorInfoW (hmonitor, (LPMONITORINFO) & monitor_info)) {
++    return FALSE;
++  }
++
++  dev_mode.dmSize = sizeof (dev_mode);
++  dev_mode.dmDriverExtra = sizeof (POINTL);
++  dev_mode.dmFields = DM_POSITION;
++  if (!EnumDisplaySettingsW
++      (monitor_info.szDevice, ENUM_CURRENT_SETTINGS, &dev_mode)) {
++    return FALSE;
++  }
++
++  SetRect (rect, 0, 0, dev_mode.dmPelsWidth, dev_mode.dmPelsHeight);
++  return TRUE;
++}
++
++static const gchar *
++_hresult_to_string_fallback (HRESULT hr)
++{
++  const gchar *s = "unknown error";
++
++  switch (hr) {
++    case DXGI_ERROR_ACCESS_DENIED:
++      s = "DXGI_ERROR_ACCESS_DENIED";
++      break;
++    case DXGI_ERROR_ACCESS_LOST:
++      s = "DXGI_ERROR_ACCESS_LOST";
++      break;
++    case DXGI_ERROR_CANNOT_PROTECT_CONTENT:
++      s = "DXGI_ERROR_CANNOT_PROTECT_CONTENT";
++      break;
++    case DXGI_ERROR_DEVICE_HUNG:
++      s = "DXGI_ERROR_DEVICE_HUNG";
++      break;
++    case DXGI_ERROR_DEVICE_REMOVED:
++      s = "DXGI_ERROR_DEVICE_REMOVED";
++      break;
++    case DXGI_ERROR_DEVICE_RESET:
++      s = "DXGI_ERROR_DEVICE_RESET";
++      break;
++    case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
++      s = "DXGI_ERROR_DRIVER_INTERNAL_ERROR";
++      break;
++    case DXGI_ERROR_FRAME_STATISTICS_DISJOINT:
++      s = "DXGI_ERROR_FRAME_STATISTICS_DISJOINT";
++      break;
++    case DXGI_ERROR_GRAPHICS_VIDPN_SOURCE_IN_USE:
++      s = "DXGI_ERROR_GRAPHICS_VIDPN_SOURCE_IN_USE";
++      break;
++    case DXGI_ERROR_INVALID_CALL:
++      s = "DXGI_ERROR_INVALID_CALL";
++      break;
++    case DXGI_ERROR_MORE_DATA:
++      s = "DXGI_ERROR_MORE_DATA";
++      break;
++    case DXGI_ERROR_NAME_ALREADY_EXISTS:
++      s = "DXGI_ERROR_NAME_ALREADY_EXISTS";
++      break;
++    case DXGI_ERROR_NONEXCLUSIVE:
++      s = "DXGI_ERROR_NONEXCLUSIVE";
++      break;
++    case DXGI_ERROR_NOT_CURRENTLY_AVAILABLE:
++      s = "DXGI_ERROR_NOT_CURRENTLY_AVAILABLE";
++      break;
++    case DXGI_ERROR_NOT_FOUND:
++      s = "DXGI_ERROR_NOT_FOUND";
++      break;
++    case DXGI_ERROR_REMOTE_CLIENT_DISCONNECTED:
++      s = "DXGI_ERROR_REMOTE_CLIENT_DISCONNECTED";
++      break;
++    case DXGI_ERROR_REMOTE_OUTOFMEMORY:
++      s = "DXGI_ERROR_REMOTE_OUTOFMEMORY";
++      break;
++    case DXGI_ERROR_RESTRICT_TO_OUTPUT_STALE:
++      s = "DXGI_ERROR_RESTRICT_TO_OUTPUT_STALE";
++      break;
++    case DXGI_ERROR_SDK_COMPONENT_MISSING:
++      s = "DXGI_ERROR_SDK_COMPONENT_MISSING";
++      break;
++    case DXGI_ERROR_SESSION_DISCONNECTED:
++      s = "DXGI_ERROR_SESSION_DISCONNECTED";
++      break;
++    case DXGI_ERROR_UNSUPPORTED:
++      s = "DXGI_ERROR_UNSUPPORTED";
++      break;
++    case DXGI_ERROR_WAIT_TIMEOUT:
++      s = "DXGI_ERROR_WAIT_TIMEOUT";
++      break;
++    case DXGI_ERROR_WAS_STILL_DRAWING:
++      s = "DXGI_ERROR_WAS_STILL_DRAWING";
++      break;
++    case D3DERR_INVALIDCALL:
++      s = "D3DERR_INVALIDCALL";
++      break;
++    case D3DERR_WASSTILLDRAWING:
++      s = "D3DERR_WASSTILLDRAWING";
++      break;
++    case E_FAIL:
++      s = "E_FAIL";
++      break;
++    case E_OUTOFMEMORY:
++      s = "E_OUTOFMEMORY";
++      break;
++    case E_NOTIMPL:
++      s = "E_NOTIMPL";
++      break;
++    case E_ACCESSDENIED:
++      s = "E_ACCESSDENIED";
++      break;
++    case E_POINTER:
++      s = "E_POINTER";
++      break;
++    case E_INVALIDARG:
++      s = "E_INVALIDARG";
++      break;
++#if defined(_MSC_VER) && (_MSC_VER >= 1800)
++    case DXGI_ERROR_ALREADY_EXISTS:
++      s = "DXGI_ERROR_ALREADY_EXISTS";
++      break;
++    case D3D11_ERROR_FILE_NOT_FOUND:
++      s = "D3D11_ERROR_FILE_NOT_FOUND";
++      break;
++    case D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS:
++      s = "D3D11_ERROR_TOO_MANY_UNIQUE_STATE_OBJECTS";
++      break;
++    case D3D11_ERROR_TOO_MANY_UNIQUE_VIEW_OBJECTS:
++      s = "D3D11_ERROR_TOO_MANY_UNIQUE_VIEW_OBJECTS";
++      break;
++    case D3D11_ERROR_DEFERRED_CONTEXT_MAP_WITHOUT_INITIAL_DISCARD:
++      s = "D3D11_ERROR_DEFERRED_CONTEXT_MAP_WITHOUT_INITIAL_DISCARD";
++      break;
++#endif
++  }
++  return s;
++}
++
++gchar *
++get_hresult_to_string (HRESULT hr)
++{
++  DWORD flags;
++  gchar *ret_text;
++  LPTSTR error_text = NULL;
++
++  flags = FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER
++      | FORMAT_MESSAGE_IGNORE_INSERTS;
++  FormatMessage (flags, NULL, hr, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),
++      (LPTSTR) & error_text, 0, NULL);
++
++  /* If we couldn't get the error msg, try the fallback switch statement */
++  if (error_text == NULL)
++    return g_strdup (_hresult_to_string_fallback (hr));
++
++#ifdef UNICODE
++  /* If UNICODE is defined, LPTSTR is LPWSTR which is UTF-16 */
++  ret_text = g_utf16_to_utf8 (error_text, 0, NULL, NULL, NULL);
++#else
++  ret_text = g_strdup (error_text);
++#endif
++
++  LocalFree (error_text);
++  return ret_text;
++}
+diff --git a/sys/winscreencap/dxgicapture.h b/sys/winscreencap/dxgicapture.h
+new file mode 100644
+index 0000000000..91cdb18610
+--- /dev/null
++++ b/sys/winscreencap/dxgicapture.h
+@@ -0,0 +1,83 @@
++/* GStreamer
++ * Copyright (C) 2019 OKADA Jun-ichi <okada@abt.jp>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++#ifndef __DXGICAP_H__
++#define __DXGICAP_H__
++
++#define COBJMACROS
++#include <d3d11.h>
++#include <dxgi.h>
++#include <dxgi1_2.h>
++#undef COBJMACROS
++
++#include <gst/gst.h>
++#include <gst/base/gstpushsrc.h>
++#include <gst/video/video.h>
++
++#define RECT_WIDTH(r) (r.right - r.left)
++#define RECT_HEIGHT(r) (r.bottom - r.top)
++
++#define HR_FAILED_AND(hr,func,and) \
++  G_STMT_START { \
++    if (FAILED (hr)) { \
++      gchar *msg = get_hresult_to_string (hr); \
++      GST_ERROR_OBJECT (src, #func " failed (%x): %s", (guint) hr, msg); \
++      g_free (msg); \
++      and; \
++    } \
++  } G_STMT_END
++
++#define HR_FAILED_RET(hr,func,ret) HR_FAILED_AND(hr,func,return ret)
++
++#define HR_FAILED_GOTO(hr,func,where) HR_FAILED_AND(hr,func,goto where)
++
++#define HR_FAILED_INFO(hr, func) \
++  G_STMT_START { \
++    if (FAILED (hr)) { \
++      gchar *msg = get_hresult_to_string (hr); \
++      GST_INFO_OBJECT (src, #func " failed (%x): %s", (guint) hr, msg); \
++      g_free (msg); \
++    } \
++  } G_STMT_END
++
++
++struct _GstDXGIScreenCapSrc;
++typedef struct _GstDXGIScreenCapSrc GstDXGIScreenCapSrc;
++
++struct _dxgicapture;
++typedef struct _dxgicapture dxgicapture;
++
++dxgicapture *dxgicap_new (HMONITOR monitor, GstDXGIScreenCapSrc * src);
++void dxgicap_destory (dxgicapture * _this);
++
++gboolean dxgicap_start (dxgicapture * _this);
++void dxgicap_stop (dxgicapture * _this);
++
++gint dxgicap_acquire_next_frame (dxgicapture * _this, gboolean show_cursor,
++    guint timeout);
++gboolean dxgicap_copy_buffer (dxgicapture * _this, gboolean show_cursor,
++    LPRECT src_rect, GstVideoInfo * video_info, GstBuffer * buf);
++
++HMONITOR get_hmonitor_by_device_name (const gchar * device_name);
++HMONITOR get_hmonitor_from_d3d9 (UINT adapter_number);
++gboolean get_monitor_physical_size (HMONITOR hmonitor, LPRECT rect);
++
++gchar *get_hresult_to_string (HRESULT hr);
++
++#endif /* __DXGICAP_H__ */
+diff --git a/sys/winscreencap/gstdxgiscreencapsrc.c b/sys/winscreencap/gstdxgiscreencapsrc.c
+new file mode 100644
+index 0000000000..a29b9121af
+--- /dev/null
++++ b/sys/winscreencap/gstdxgiscreencapsrc.c
+@@ -0,0 +1,561 @@
++/* GStreamer
++ * Copyright (C) 2019 OKADA Jun-ichi <okada@abt.jp>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++
++/**
++ * SECTION:element-dxgiscreencapsrc
++ * @title: dxgiscreencapsrc
++ *
++ * This element uses DXGI Desktop Duplication API.
++ * The default is capturing the whole desktop, but #GstDXGIScreenCapSrc:x,
++ * #GstDXGIScreenCapSrc:y, #GstDXGIScreenCapSrc:width and
++ * #GstDXGIScreenCapSrc:height can be used to select a particular region.
++ * Use #GstDXGIScreenCapSrc:monitor for changing which monitor to capture
++ * from.
++ *
++ * ## Example pipelines
++ * |[
++ * gst-launch-1.0 dxgiscreencapsrc ! videoconvert ! dshowvideosink
++ * ]| Capture the desktop and display it.
++ * |[
++ * gst-launch-1.0 dxgiscreencapsrc x=100 y=100 width=320 height=240 !
++ * videoconvert ! dshowvideosink
++ * ]| Capture a portion of the desktop and display it.
++ *
++ */
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include <gst/video/video.h>
++#include "gstdxgiscreencapsrc.h"
++#include "dxgicapture.h"
++
++GST_DEBUG_CATEGORY_STATIC (dxgiscreencapsrc_debug);
++
++struct _GstDXGIScreenCapSrc
++{
++  /* Parent */
++  GstPushSrc src;
++
++  /* Properties */
++  gint capture_x;
++  gint capture_y;
++  gint capture_w;
++  gint capture_h;
++  guint monitor;
++  gchar *device_name;
++  gboolean show_cursor;
++
++  /* Source pad frame rate */
++  gint rate_numerator;
++  gint rate_denominator;
++
++  /* Runtime variables */
++  RECT screen_rect;
++  RECT src_rect;
++  guint64 frame_number;
++  GstClockID clock_id;
++  GstVideoInfo video_info;
++
++  /*DXGI capture */
++  dxgicapture *dxgi_capture;
++};
++
++static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
++    GST_PAD_SRC,
++    GST_PAD_ALWAYS,
++    GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("BGR")));
++
++#define gst_dxgi_screen_cap_src_parent_class parent_class
++G_DEFINE_TYPE (GstDXGIScreenCapSrc, gst_dxgi_screen_cap_src, GST_TYPE_PUSH_SRC);
++
++#define DEFAULT_MONITOR (0)
++#define DEFAULT_DEVICE_NAME (NULL)
++#define DEFAULT_SOW_CURSOR (FALSE)
++#define DEFAULT_X_POS (0)
++#define DEFAULT_Y_POS (0)
++#define DEFAULT_WIDTH (0)
++#define DEFAULT_HEIGHT (0)
++
++enum
++{
++  PROP_0,
++  PROP_MONITOR,
++  PROP_DEVICE_NAME,
++  PROP_SHOW_CURSOR,
++  PROP_X_POS,
++  PROP_Y_POS,
++  PROP_WIDTH,
++  PROP_HEIGHT
++};
++
++static void gst_dxgi_screen_cap_src_dispose (GObject * object);
++static void gst_dxgi_screen_cap_src_set_property (GObject * object,
++    guint prop_id, const GValue * value, GParamSpec * pspec);
++static void gst_dxgi_screen_cap_src_get_property (GObject * object,
++    guint prop_id, GValue * value, GParamSpec * pspec);
++
++static GstCaps *gst_dxgi_screen_cap_src_fixate (GstBaseSrc * bsrc,
++    GstCaps * caps);
++static gboolean gst_dxgi_screen_cap_src_set_caps (GstBaseSrc * bsrc,
++    GstCaps * caps);
++static GstCaps *gst_dxgi_screen_cap_src_get_caps (GstBaseSrc * bsrc,
++    GstCaps * filter);
++static gboolean gst_dxgi_screen_cap_src_start (GstBaseSrc * bsrc);
++static gboolean gst_dxgi_screen_cap_src_stop (GstBaseSrc * bsrc);
++
++static gboolean gst_dxgi_screen_cap_src_unlock (GstBaseSrc * bsrc);
++
++static GstFlowReturn gst_dxgi_screen_cap_src_fill (GstPushSrc * pushsrc,
++    GstBuffer * buffer);
++
++
++static HMONITOR _get_hmonitor (GstDXGIScreenCapSrc * src);
++
++/* Implementation. */
++static void
++gst_dxgi_screen_cap_src_class_init (GstDXGIScreenCapSrcClass * klass)
++{
++  GObjectClass *go_class;
++  GstElementClass *e_class;
++  GstBaseSrcClass *bs_class;
++  GstPushSrcClass *ps_class;
++
++  go_class = G_OBJECT_CLASS (klass);
++  e_class = GST_ELEMENT_CLASS (klass);
++  bs_class = GST_BASE_SRC_CLASS (klass);
++  ps_class = GST_PUSH_SRC_CLASS (klass);
++
++  go_class->set_property = gst_dxgi_screen_cap_src_set_property;
++  go_class->get_property = gst_dxgi_screen_cap_src_get_property;
++
++  go_class->dispose = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_dispose);
++  bs_class->get_caps = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_get_caps);
++  bs_class->set_caps = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_set_caps);
++  bs_class->start = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_start);
++  bs_class->stop = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_stop);
++  bs_class->unlock = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_unlock);
++  bs_class->fixate = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_fixate);
++  ps_class->fill = GST_DEBUG_FUNCPTR (gst_dxgi_screen_cap_src_fill);
++
++  g_object_class_install_property (go_class, PROP_MONITOR,
++      g_param_spec_int ("monitor", "Monitor",
++          "Which monitor to use (0 = 1st monitor and default)",
++          0, G_MAXINT, DEFAULT_MONITOR, G_PARAM_READWRITE));
++  g_object_class_install_property (go_class, PROP_DEVICE_NAME,
++      g_param_spec_string ("device-name", "Monitor device name",
++          "Which monitor to use by device name (e.g. \"\\\\\\\\.\\\\DISPLAY1\")",
++          DEFAULT_DEVICE_NAME, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
++  g_object_class_install_property (go_class, PROP_SHOW_CURSOR,
++      g_param_spec_boolean ("cursor",
++          "Show mouse cursor",
++          "Whether to show mouse cursor (default off)",
++          DEFAULT_SOW_CURSOR, G_PARAM_READWRITE));
++  g_object_class_install_property (go_class, PROP_X_POS,
++      g_param_spec_int ("x", "X",
++          "Horizontal coordinate of top left corner for the screen capture "
++          "area", 0, G_MAXINT, DEFAULT_X_POS, G_PARAM_READWRITE));
++  g_object_class_install_property (go_class, PROP_Y_POS,
++      g_param_spec_int ("y", "Y",
++          "Vertical coordinate of top left corner for the screen capture "
++          "area", 0, G_MAXINT, DEFAULT_Y_POS, G_PARAM_READWRITE));
++  g_object_class_install_property (go_class, PROP_WIDTH,
++      g_param_spec_int ("width", "Width",
++          "Width of screen capture area (0 = maximum)",
++          0, G_MAXINT, DEFAULT_WIDTH, G_PARAM_READWRITE));
++  g_object_class_install_property (go_class, PROP_HEIGHT,
++      g_param_spec_int ("height", "Height",
++          "Height of screen capture area (0 = maximum)",
++          0, G_MAXINT, DEFAULT_HEIGHT, G_PARAM_READWRITE));
++
++  gst_element_class_add_static_pad_template (e_class, &src_template);
++
++  gst_element_class_set_static_metadata (e_class,
++      "DirectX DXGI screen capture source",
++      "Source/Video", "Captures screen", "OKADA Jun-ichi <okada@abt.jp>");
++
++  GST_DEBUG_CATEGORY_INIT (dxgiscreencapsrc_debug, "dxgiscreencapsrc", 0,
++      "DirectX DXGI screen capture source");
++}
++
++static void
++gst_dxgi_screen_cap_src_init (GstDXGIScreenCapSrc * src)
++{
++  /* Set src element inital values... */
++  src->capture_x = DEFAULT_X_POS;
++  src->capture_y = DEFAULT_Y_POS;
++  src->capture_w = DEFAULT_WIDTH;
++  src->capture_h = DEFAULT_HEIGHT;
++
++  src->monitor = DEFAULT_MONITOR;
++  src->device_name = DEFAULT_DEVICE_NAME;
++  src->show_cursor = DEFAULT_SOW_CURSOR;
++
++  src->dxgi_capture = NULL;
++
++  gst_base_src_set_live (GST_BASE_SRC (src), TRUE);
++  gst_base_src_set_format (GST_BASE_SRC (src), GST_FORMAT_TIME);
++}
++
++static void
++gst_dxgi_screen_cap_src_dispose (GObject * object)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (object);
++
++  g_free (src->device_name);
++  src->device_name = NULL;
++
++  dxgicap_destory (src->dxgi_capture);
++  src->dxgi_capture = NULL;
++
++  G_OBJECT_CLASS (parent_class)->dispose (object);
++}
++
++static void
++gst_dxgi_screen_cap_src_set_property (GObject * object,
++    guint prop_id, const GValue * value, GParamSpec * pspec)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (object);
++
++  switch (prop_id) {
++    case PROP_MONITOR:
++      src->monitor = g_value_get_int (value);
++      break;
++    case PROP_DEVICE_NAME:
++      g_free (src->device_name);
++      src->device_name = g_value_dup_string (value);
++      break;
++    case PROP_SHOW_CURSOR:
++      src->show_cursor = g_value_get_boolean (value);
++      break;
++    case PROP_X_POS:
++      src->capture_x = g_value_get_int (value);
++      break;
++    case PROP_Y_POS:
++      src->capture_y = g_value_get_int (value);
++      break;
++    case PROP_WIDTH:
++      src->capture_w = g_value_get_int (value);
++      break;
++    case PROP_HEIGHT:
++      src->capture_h = g_value_get_int (value);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  };
++}
++
++static void
++gst_dxgi_screen_cap_src_get_property (GObject * object, guint prop_id,
++    GValue * value, GParamSpec * pspec)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (object);
++
++  switch (prop_id) {
++    case PROP_MONITOR:
++      g_value_set_int (value, src->monitor);
++      break;
++    case PROP_DEVICE_NAME:
++      if (NULL == src->device_name) {
++        g_value_set_static_string (value, "");
++      } else {
++        g_value_set_string (value, src->device_name);
++      }
++      break;
++    case PROP_SHOW_CURSOR:
++      g_value_set_boolean (value, src->show_cursor);
++      break;
++    case PROP_X_POS:
++      g_value_set_int (value, src->capture_x);
++      break;
++    case PROP_Y_POS:
++      g_value_set_int (value, src->capture_y);
++      break;
++    case PROP_WIDTH:
++      g_value_set_int (value, src->capture_w);
++      break;
++    case PROP_HEIGHT:
++      g_value_set_int (value, src->capture_h);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
++      break;
++  };
++}
++
++static GstCaps *
++gst_dxgi_screen_cap_src_fixate (GstBaseSrc * bsrc, GstCaps * caps)
++{
++  GstStructure *structure;
++
++  caps = gst_caps_make_writable (caps);
++
++  structure = gst_caps_get_structure (caps, 0);
++
++  gst_structure_fixate_field_nearest_int (structure, "width", 640);
++  gst_structure_fixate_field_nearest_int (structure, "height", 480);
++  gst_structure_fixate_field_nearest_fraction (structure, "framerate", 30, 1);
++
++  caps = GST_BASE_SRC_CLASS (parent_class)->fixate (bsrc, caps);
++
++  return caps;
++}
++
++static gboolean
++gst_dxgi_screen_cap_src_set_caps (GstBaseSrc * bsrc, GstCaps * caps)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (bsrc);
++  GstStructure *structure;
++
++  structure = gst_caps_get_structure (caps, 0);
++
++  src->src_rect = src->screen_rect;
++  if (src->capture_w && src->capture_h) {
++    src->src_rect.left += src->capture_x;
++    src->src_rect.top += src->capture_y;
++    src->src_rect.right = src->src_rect.left + src->capture_w;
++    src->src_rect.bottom = src->src_rect.top + src->capture_h;
++  }
++
++  gst_structure_get_fraction (structure, "framerate",
++      &src->rate_numerator, &src->rate_denominator);
++
++  GST_DEBUG_OBJECT (src, "set_caps size %dx%d, %d/%d fps",
++      (gint) RECT_WIDTH (src->src_rect),
++      (gint) RECT_HEIGHT (src->src_rect),
++      src->rate_numerator, src->rate_denominator);
++
++  gst_video_info_from_caps (&src->video_info, caps);
++
++  return TRUE;
++}
++
++static GstCaps *
++gst_dxgi_screen_cap_src_get_caps (GstBaseSrc * bsrc, GstCaps * filter)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (bsrc);
++  RECT rect_dst;
++  GstCaps *caps = NULL;
++
++  HMONITOR hmonitor = _get_hmonitor (src);
++  if (!get_monitor_physical_size (hmonitor, &rect_dst)) {
++    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
++        ("Specified monitor with index %d not found", src->monitor), (NULL));
++    return NULL;
++  }
++
++  src->screen_rect = rect_dst;
++  if (src->capture_w && src->capture_h &&
++      src->capture_x + src->capture_w < RECT_WIDTH (rect_dst) &&
++      src->capture_y + src->capture_h < RECT_HEIGHT (rect_dst)) {
++    rect_dst.left = src->capture_x;
++    rect_dst.top = src->capture_y;
++    rect_dst.right = src->capture_x + src->capture_w;
++    rect_dst.bottom = src->capture_y + src->capture_h;
++  } else {
++    /* Default values */
++    src->capture_x = src->capture_y = 0;
++    src->capture_w = src->capture_h = 0;
++  }
++
++  /*
++   * The desktop image is always in the DXGI_FORMAT_B8G8R8A8_UNORM format.
++   */
++  GST_DEBUG_OBJECT (src, "get_cap rect: %ld, %ld, %ld, %ld", rect_dst.left,
++      rect_dst.top, rect_dst.right, rect_dst.bottom);
++
++  caps =
++      gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "BGRx",
++      "width", G_TYPE_INT, RECT_WIDTH (rect_dst),
++      "height", G_TYPE_INT, RECT_HEIGHT (rect_dst),
++      "framerate", GST_TYPE_FRACTION_RANGE, 1, 1, G_MAXINT,
++      1, "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1, NULL);
++
++  if (filter) {
++    GstCaps *tmp =
++        gst_caps_intersect_full (filter, caps, GST_CAPS_INTERSECT_FIRST);
++    gst_caps_unref (caps);
++    caps = tmp;
++  }
++  return caps;
++}
++
++static gboolean
++gst_dxgi_screen_cap_src_start (GstBaseSrc * bsrc)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (bsrc);
++  HMONITOR hmonitor = _get_hmonitor (src);
++  if (NULL == hmonitor) {
++    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
++        ("Specified monitor with index %d not found", src->monitor), (NULL));
++    return FALSE;
++  }
++  src->dxgi_capture = dxgicap_new (hmonitor, src);
++
++  if (NULL == src->dxgi_capture) {
++    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
++        ("Specified monitor with index %d not found", src->monitor), (NULL));
++    return FALSE;
++  }
++  dxgicap_start (src->dxgi_capture);
++
++  src->frame_number = -1;
++  return TRUE;
++}
++
++static gboolean
++gst_dxgi_screen_cap_src_stop (GstBaseSrc * bsrc)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (bsrc);
++  dxgicap_stop (src->dxgi_capture);
++  dxgicap_destory (src->dxgi_capture);
++  src->dxgi_capture = NULL;
++
++  return TRUE;
++}
++
++static gboolean
++gst_dxgi_screen_cap_src_unlock (GstBaseSrc * bsrc)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (bsrc);
++
++  GST_OBJECT_LOCK (src);
++  if (src->clock_id) {
++    GST_DEBUG_OBJECT (src, "Waking up waiting clock");
++    gst_clock_id_unschedule (src->clock_id);
++  }
++  GST_OBJECT_UNLOCK (src);
++
++  return TRUE;
++}
++
++static GstFlowReturn
++gst_dxgi_screen_cap_src_fill (GstPushSrc * push_src, GstBuffer * buf)
++{
++  GstDXGIScreenCapSrc *src = GST_DXGI_SCREEN_CAP_SRC (push_src);
++  GstClock *clock;
++  GstClockTime buf_time, buf_dur;
++  guint64 frame_number;
++
++  if (G_UNLIKELY (!src->dxgi_capture)) {
++    GST_DEBUG_OBJECT (src, "format wasn't negotiated before create function");
++    return GST_FLOW_NOT_NEGOTIATED;
++  }
++
++  clock = gst_element_get_clock (GST_ELEMENT (src));
++  if (clock != NULL) {
++    GstClockTime time, base_time;
++
++    /* Calculate sync time. */
++
++    time = gst_clock_get_time (clock);
++    base_time = gst_element_get_base_time (GST_ELEMENT (src));
++    buf_time = time - base_time;
++
++    if (src->rate_numerator) {
++      frame_number = gst_util_uint64_scale (buf_time,
++          src->rate_numerator, GST_SECOND * src->rate_denominator);
++    } else {
++      frame_number = -1;
++    }
++  } else {
++    buf_time = GST_CLOCK_TIME_NONE;
++    frame_number = -1;
++  }
++
++  if (frame_number != -1 && frame_number == src->frame_number) {
++    GstClockID id;
++    GstClockReturn ret;
++
++    /* Need to wait for the next frame */
++    frame_number += 1;
++
++    /* Figure out what the next frame time is */
++    buf_time = gst_util_uint64_scale (frame_number,
++        src->rate_denominator * GST_SECOND, src->rate_numerator);
++
++    id = gst_clock_new_single_shot_id (clock,
++        buf_time + gst_element_get_base_time (GST_ELEMENT (src)));
++    GST_OBJECT_LOCK (src);
++    src->clock_id = id;
++    GST_OBJECT_UNLOCK (src);
++
++    GST_DEBUG_OBJECT (src, "Waiting for next frame time %" G_GUINT64_FORMAT,
++        buf_time);
++    ret = gst_clock_id_wait (id, NULL);
++
++    GST_OBJECT_LOCK (src);
++    gst_clock_id_unref (id);
++    src->clock_id = NULL;
++    GST_OBJECT_UNLOCK (src);
++
++    if (ret == GST_CLOCK_UNSCHEDULED) {
++      /* Got woken up by the unlock function */
++      gst_object_unref (clock);
++      return GST_FLOW_FLUSHING;
++    }
++
++    /* Duration is a complete 1/fps frame duration */
++    buf_dur =
++        gst_util_uint64_scale_int (GST_SECOND, src->rate_denominator,
++        src->rate_numerator);
++  } else if (frame_number != -1) {
++    GstClockTime next_buf_time;
++
++    GST_DEBUG_OBJECT (src, "No need to wait for next frame time %"
++        G_GUINT64_FORMAT " next frame = %" G_GINT64_FORMAT
++        " prev = %" G_GINT64_FORMAT, buf_time, frame_number, src->frame_number);
++    next_buf_time =
++        gst_util_uint64_scale (frame_number + 1,
++        src->rate_denominator * GST_SECOND, src->rate_numerator);
++    /* Frame duration is from now until the next expected capture time */
++    buf_dur = next_buf_time - buf_time;
++  } else {
++    buf_dur = GST_CLOCK_TIME_NONE;
++  }
++  src->frame_number = frame_number;
++
++  /* Get the latest desktop frame. */
++  if (dxgicap_acquire_next_frame (src->dxgi_capture, src->show_cursor, 0)) {
++    /* Copy the latest desktop frame to the video frame. */
++    if (dxgicap_copy_buffer (src->dxgi_capture, src->show_cursor,
++            &src->src_rect, &src->video_info, buf)) {
++      GST_BUFFER_TIMESTAMP (buf) = buf_time;
++      GST_BUFFER_DURATION (buf) = buf_dur;
++      return GST_FLOW_OK;
++    }
++  }
++  return GST_FLOW_ERROR;
++}
++
++static HMONITOR
++_get_hmonitor (GstDXGIScreenCapSrc * src)
++{
++  HMONITOR hmonitor = NULL;
++  GST_DEBUG_OBJECT (src, "device_name:%s", src->device_name);
++  if (NULL != src->device_name) {
++    hmonitor = get_hmonitor_by_device_name (src->device_name);
++  }
++  if (NULL == hmonitor) {
++    hmonitor = get_hmonitor_from_d3d9 (src->monitor);
++  }
++  return hmonitor;
++}
+diff --git a/sys/winscreencap/gstdxgiscreencapsrc.h b/sys/winscreencap/gstdxgiscreencapsrc.h
+new file mode 100644
+index 0000000000..4e5fa2283e
+--- /dev/null
++++ b/sys/winscreencap/gstdxgiscreencapsrc.h
+@@ -0,0 +1,32 @@
++/* GStreamer
++ * Copyright (C) 2019 OKADA Jun-ichi <okada@abt.jp>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
++ * Boston, MA 02110-1301, USA.
++ */
++#ifndef __GST_DXGI_SCREEN_CAP_SRC_H__
++#define __GST_DXGI_SCREEN_CAP_SRC_H__
++
++#include <windows.h>
++#include <gst/gst.h>
++#include <gst/base/gstpushsrc.h>
++
++G_BEGIN_DECLS
++#define GST_TYPE_DXGI_SCREEN_CAP_SRC  (gst_dxgi_screen_cap_src_get_type())
++G_DECLARE_FINAL_TYPE (GstDXGIScreenCapSrc, gst_dxgi_screen_cap_src, GST,
++    DXGI_SCREEN_CAP_SRC, GstPushSrc);
++
++G_END_DECLS
++#endif /* __GST_DXGI_SCREEN_CAP_SRC_H__ */
+diff --git a/sys/winscreencap/gstwinscreencap.c b/sys/winscreencap/gstwinscreencap.c
+index fb6b332e91..5d49b6d83b 100644
+--- a/sys/winscreencap/gstwinscreencap.c
++++ b/sys/winscreencap/gstwinscreencap.c
+@@ -20,11 +20,15 @@
+ #ifdef HAVE_CONFIG_H
+ #include "config.h"
+ #endif
+-
+ #include "gstwinscreencap.h"
+ #include "gstgdiscreencapsrc.h"
+ #include "gstdx9screencapsrc.h"
+ 
++#ifdef HAVE_DXGI_CAP
++#include <versionhelpers.h>
++#include "gstdxgiscreencapsrc.h"
++#endif
++
+ static BOOL CALLBACK
+ _diplay_monitor_enum (HMONITOR hMon, HDC hdc, LPRECT rect, LPARAM param)
+ {
+@@ -66,6 +70,15 @@ plugin_init (GstPlugin * plugin)
+           GST_RANK_NONE, GST_TYPE_DX9SCREENCAPSRC)) {
+     return FALSE;
+   }
++#ifdef HAVE_DXGI_CAP
++  if (IsWindows8OrGreater ()) {
++    /* dxgiscreencapsrc is needs Windows8 or later. */
++    if (!gst_element_register (plugin, "dxgiscreencapsrc",
++            GST_RANK_NONE, GST_TYPE_DXGI_SCREEN_CAP_SRC)) {
++      return FALSE;
++    }
++  }
++#endif
+ 
+   return TRUE;
+ }
+diff --git a/sys/winscreencap/meson.build b/sys/winscreencap/meson.build
+index 4e3ef1502e..11bf5da422 100644
+--- a/sys/winscreencap/meson.build
++++ b/sys/winscreencap/meson.build
+@@ -4,23 +4,47 @@ winscreencap_sources = [
+   'gstwinscreencap.c',
+ ]
+ 
++have_dxgi = false
++dxgi_c_args = []
++dxgiscreencap_sources = []
++dxgi_dep = []
++
+ if host_system != 'windows' or get_option('winscreencap').disabled()
+   subdir_done()
+ endif
+ 
+ d3d_dep = cc.find_library('d3d9', required : get_option('winscreencap'))
+ gdi_dep = cc.find_library('gdi32', required : get_option('winscreencap'))
++d3d11_dep = cc.find_library('d3d11', required : false)
++dxgi_lib_dep = cc.find_library('dxgi', required : false)
++d3d_compile_dep = cc.find_library('d3dcompiler', required : false)
++windowscodecs_dep = cc.find_library('windowscodecs',  required : false)
++dxguid_dep = cc.find_library('dxguid',  required : false) 
++
++have_d3d11_h = cc.has_header('d3d11.h')
++have_dxgi_h = cc.has_header('dxgi1_2.h')
++have_d3dcompiler_h = cc.has_header('d3dcompiler.h')
++have_versionhelpers_h = cc.has_header('versionhelpers.h')
++
+ have_d3d9_h = cc.has_header('d3d9.h')
+ if not have_d3d9_h and get_option('winscreencap').enabled()
+   error('winscreencap plugin enabled but d3d9.h not found')
+ endif
+ 
++have_dxgi = d3d11_dep.found() and dxgi_lib_dep.found() and d3d_compile_dep.found() and windowscodecs_dep.found() and dxguid_dep.found() and have_d3d11_h and have_dxgi_h and have_d3dcompiler_h and have_versionhelpers_h
++
++if have_dxgi
++  dxgi_c_args += ['-DHAVE_DXGI_CAP']
++  dxgiscreencap_sources += ['dxgicapture.c', 'gstdxgiscreencapsrc.c']
++  dxgi_dep += [d3d11_dep, dxgi_lib_dep, d3d_compile_dep, windowscodecs_dep, dxguid_dep]
++endif
++
+ if d3d_dep.found() and gdi_dep.found() and have_d3d9_h
+   gstwinscreencap = library('gstwinscreencap',
+-    winscreencap_sources,
+-    c_args : gst_plugins_bad_args,
++    winscreencap_sources + dxgiscreencap_sources,
++    c_args : gst_plugins_bad_args + dxgi_c_args,
+     include_directories : [configinc],
+-    dependencies : [gstbase_dep, gstvideo_dep, d3d_dep, gdi_dep],
++    dependencies : [gstbase_dep, gstvideo_dep, d3d_dep, gdi_dep] + dxgi_dep,
+     install : true,
+     install_dir : plugins_install_dir,
+   )
+-- 
+2.26.2.windows.1
+
