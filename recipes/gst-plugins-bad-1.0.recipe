@@ -4,10 +4,13 @@ from cerbero.tools.libtool import LibtoolLibrary
 class Recipe(custom.GStreamer):
     name = 'gst-plugins-bad-1.0'
     btype = BuildType.MESON
+    library_type = LibraryType.STATIC
     tarball_checksum = 'f1cb7aa2389569a5343661aae473f0a940a90b872001824bc47fa8072a041e74'
     # Explicitly enable plugins that we provide dependencies for to ensure that
     # we error out if they weren't found.
-    meson_options = {# enabled plugins
+    meson_options = {# static fixes
+                     'tests': 'disabled',
+                     # enabled plugins
                      'assrender': 'enabled',
                      'bz2': 'enabled',
                      'closedcaption': 'enabled',
@@ -69,7 +72,8 @@ class Recipe(custom.GStreamer):
             'srt', 'libusrsctp']
     use_system_libs = True
 
-    patches = ['gst-plugins-bad-1.0/0001-winscreencap-Add-screen-capture-element-using-Deskto.patch']
+    patches = ['gst-plugins-bad-1.0/0001-winscreencap-Add-screen-capture-element-using-Deskto.patch',
+               'gst-plugins-bad-1.0/0002-Add-missing-GST_STATIC_COMPILATION.patch']
 
     files_lang = ['gst-plugins-bad-1.0']
 

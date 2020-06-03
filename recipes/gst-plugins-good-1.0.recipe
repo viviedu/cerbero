@@ -3,8 +3,12 @@
 class Recipe(custom.GStreamer):
     name = 'gst-plugins-good-1.0'
     btype = BuildType.MESON
+    library_type = LibraryType.STATIC
     tarball_checksum = '40bb3bafda25c0b739c8fc36e48380fccf61c4d3f83747e97ac3f9b0171b1319'
-    meson_options = {# enabled plugins
+    meson_options = {# static fixes
+                     'tests': 'disabled',
+                     'multifile': 'disabled', # builds a rogue test executable, disabled until we need it
+                     # enabled plugins
                      'cairo': 'enabled',
                      'dv': 'enabled',
                      'flac': 'enabled',
@@ -34,6 +38,7 @@ class Recipe(custom.GStreamer):
             'orc', 'wavpack', 'flac', 'taglib', 'bzip2', 'zlib',
             'libvpx', 'libdv', 'cairo']
 
+    patches = ['gst-plugins-good-1.0/0001-Add-missing-GST_STATIC_COMPILATION-and-ORC_STATIC_CO.patch']
 
     files_lang = ['gst-plugins-good-1.0']
 

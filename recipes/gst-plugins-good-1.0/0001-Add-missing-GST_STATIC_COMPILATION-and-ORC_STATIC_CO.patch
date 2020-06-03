@@ -1,0 +1,27 @@
+From fd22b309bab26ef66cb39493e266f49b15021216 Mon Sep 17 00:00:00 2001
+From: Cerbero <cerbero@gstreamer.freedesktop.org>
+Date: Wed, 3 Jun 2020 17:01:27 +1000
+Subject: [PATCH] Add missing GST_STATIC_COMPILATION and ORC_STATIC_COMPILATION
+
+---
+ meson.build | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/meson.build b/meson.build
+index 3a422ce84..a8a389b73 100644
+--- a/meson.build
++++ b/meson.build
+@@ -316,6 +316,10 @@ glib_deps = [dependency('glib-2.0', version : glib_req, fallback: ['glib', 'libg
+ gio_dep = dependency('gio-2.0', fallback: ['glib', 'libgio_dep'])
+ 
+ gst_plugins_good_args = ['-DHAVE_CONFIG_H']
++if get_option('default_library') == 'static'
++  gst_plugins_good_args += ['-DGST_STATIC_COMPILATION', '-DORC_STATIC_COMPILATION']
++endif
++
+ configinc = include_directories('.')
+ libsinc = include_directories('gst-libs')
+ 
+-- 
+2.26.2.windows.1
+

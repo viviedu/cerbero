@@ -1,0 +1,25 @@
+From 61f1b02ffc79c6efa0f0ce8d49af8e073c3882c4 Mon Sep 17 00:00:00 2001
+From: Cerbero <cerbero@gstreamer.freedesktop.org>
+Date: Wed, 3 Jun 2020 16:19:46 +1000
+Subject: [PATCH] Add missing ORC_STATIC_COMPILATION
+
+---
+ meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index 767f98f11..bb29e7674 100644
+--- a/meson.build
++++ b/meson.build
+@@ -239,7 +239,7 @@ core_conf.set('AUDIORESAMPLE_FORMAT_' + get_option('audioresample_format').to_up
+ 
+ gst_plugins_base_args = ['-DHAVE_CONFIG_H']
+ if get_option('default_library') == 'static'
+-  gst_plugins_base_args += ['-DGST_STATIC_COMPILATION']
++  gst_plugins_base_args += ['-DGST_STATIC_COMPILATION', '-DORC_STATIC_COMPILATION']
+ endif
+ 
+ # X11 checks are for sys/ and tests/
+-- 
+2.26.2.windows.1
+

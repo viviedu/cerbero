@@ -4,6 +4,7 @@
 class Recipe(custom.GStreamer):
     name = 'gst-plugins-ugly-1.0'
     btype = BuildType.MESON
+    library_type = LibraryType.STATIC
     tarball_checksum = '5500415b865e8b62775d4742cbb9f37146a50caecfc0e7a6fc0160d3c560fbca'
     meson_options = {'a52dec': 'enabled',
                      'amrnb': 'enabled',
@@ -12,6 +13,8 @@ class Recipe(custom.GStreamer):
                      'x264': 'enabled'}
     deps = ['gstreamer-1.0', 'gst-plugins-base-1.0', 'a52dec', 'opencore-amr',
             'libdvdread', 'x264']
+
+    patches = ['gst-plugins-ugly-1.0/0001-Add-missing-GST_STATIC_COMPILATION.patch']
 
     files_plugins_codecs_restricted = [
              'lib/gstreamer-1.0/libgsta52dec%(mext)s',

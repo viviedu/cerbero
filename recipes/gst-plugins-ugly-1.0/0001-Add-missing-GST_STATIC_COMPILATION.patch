@@ -1,0 +1,27 @@
+From 48f44f7556b7ee103c07b19ac7f03a9f506bce22 Mon Sep 17 00:00:00 2001
+From: Cerbero <cerbero@gstreamer.freedesktop.org>
+Date: Wed, 3 Jun 2020 18:44:04 +1000
+Subject: [PATCH] Add missing GST_STATIC_COMPILATION
+
+---
+ meson.build | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/meson.build b/meson.build
+index e69282ad..9feec458 100644
+--- a/meson.build
++++ b/meson.build
+@@ -158,6 +158,10 @@ endif
+ gmodule_dep = dependency('gmodule-2.0', fallback : ['glib', 'libgmodule_dep'])
+ 
+ ugly_args = ['-DHAVE_CONFIG_H']
++if get_option('default_library') == 'static'
++  ugly_args += ['-DGST_STATIC_COMPILATION']
++endif
++
+ configinc = include_directories('.')
+ libsinc = include_directories('gst-libs')
+ 
+-- 
+2.26.2.windows.1
+

@@ -4,8 +4,12 @@
 class Recipe(custom.GStreamer):
     name = 'gst-plugins-base-1.0'
     btype = BuildType.MESON
+    library_type = LibraryType.STATIC
     tarball_checksum = 'b13e73e2fe74a4166552f9577c3dcb24bed077021b9c7fa600d910ec6987816a'
-    meson_options = {# enabled plugins
+    meson_options = {# static fixes
+                     'tests': 'disabled',
+                     'tools': 'disabled',
+                     # enabled plugins
                      'gl': 'enabled',
                      'gl-graphene': 'enabled',
                      'gl-png': 'enabled',
@@ -23,6 +27,8 @@ class Recipe(custom.GStreamer):
             'libjpeg-turbo', 'libpng']
     platform_deps = {Platform.ANDROID: [ 'tremor' ], Platform.IOS: [ 'tremor' ] }
     use_system_libs = True
+
+    patches = ['gst-plugins-base-1.0/0001-Add-missing-ORC_STATIC_COMPILATION.patch']
 
     files_bins = ['gst-discoverer-1.0', 'gst-play-1.0', 'gst-device-monitor-1.0']
 
