@@ -5,6 +5,7 @@ class Recipe(custom.GStreamer):
     name = 'gstreamer-1.0'
     btype = BuildType.MESON
     tarball_checksum = 'e3f044246783fd685439647373fa13ba14f7ab0b346eadd06437092f8419e94e'
+    meson_options = {'registry': 'false'}
     deps = ['glib']
 
     files_bins = ['gst-inspect-1.0',
