@@ -1,0 +1,108 @@
+From 74820c11a2a46756009960b4d90d9c54d0356db3 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jake@vivi.io>
+Date: Mon, 15 Jun 2020 15:16:19 +1000
+Subject: [PATCH] sdpdemux: Add property to disable RTCP
+
+---
+ gst/sdp/gstsdpdemux.c | 26 +++++++++++++++++++++++---
+ gst/sdp/gstsdpdemux.h |  1 +
+ 2 files changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/gst/sdp/gstsdpdemux.c b/gst/sdp/gstsdpdemux.c
+index 4fc316d99a..3b9efa0e6b 100644
+--- a/gst/sdp/gstsdpdemux.c
++++ b/gst/sdp/gstsdpdemux.c
+@@ -77,6 +77,7 @@ enum
+ #define DEFAULT_TIMEOUT          10000000
+ #define DEFAULT_LATENCY_MS       200
+ #define DEFAULT_REDIRECT         TRUE
++#define DEFAULT_RTCP             TRUE
+ 
+ enum
+ {
+@@ -84,7 +85,8 @@ enum
+   PROP_DEBUG,
+   PROP_TIMEOUT,
+   PROP_LATENCY,
+-  PROP_REDIRECT
++  PROP_REDIRECT,
++  PROP_RTCP
+ };
+ 
+ static void gst_sdp_demux_finalize (GObject * object);
+@@ -150,6 +152,12 @@ gst_sdp_demux_class_init (GstSDPDemuxClass * klass)
+           DEFAULT_REDIRECT,
+           G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
+ 
++  g_object_class_install_property (gobject_class, PROP_RTCP,
++      g_param_spec_boolean ("rtcp", "RTCP",
++          "Enable RTCP",
++          DEFAULT_RTCP,
++          G_PARAM_READWRITE | G_PARAM_CONSTRUCT | G_PARAM_STATIC_STRINGS));
++
+   gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
+   gst_element_class_add_static_pad_template (gstelement_class, &rtptemplate);
+ 
+@@ -218,6 +226,9 @@ gst_sdp_demux_set_property (GObject * object, guint prop_id,
+     case PROP_REDIRECT:
+       demux->redirect = g_value_get_boolean (value);
+       break;
++    case PROP_RTCP:
++      demux->rtcp = g_value_get_boolean (value);
++      break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -245,6 +256,9 @@ gst_sdp_demux_get_property (GObject * object, guint prop_id, GValue * value,
+     case PROP_REDIRECT:
+       g_value_set_boolean (value, demux->redirect);
+       break;
++    case PROP_RTCP:
++      g_value_set_boolean (value, demux->rtcp);
++      break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -779,7 +793,7 @@ gst_sdp_demux_stream_configure_udp (GstSDPDemux * demux, GstSDPStream * stream)
+   }
+ 
+   /* creating another UDP source */
+-  if (stream->rtcp_port != -1) {
++  if (demux->rtcp && stream->rtcp_port != -1) {
+     GST_DEBUG_OBJECT (demux, "receiving RTCP from %s:%d", destination,
+         stream->rtcp_port);
+     uri = g_strdup_printf ("udp://%s:%d", destination, stream->rtcp_port);
+@@ -824,6 +838,10 @@ gst_sdp_demux_stream_configure_udp_sink (GstSDPDemux * demux,
+   GSocket *socket;
+   gchar *destination, *uri, *name;
+ 
++  if (!demux->rtcp) {
++    return TRUE;
++  }
++
+   /* get destination and port */
+   port = stream->rtcp_port;
+   destination = stream->destination;
+@@ -1167,7 +1185,9 @@ gst_sdp_demux_start (GstSDPDemux * demux)
+ 
+       /* configure target state on udp sources */
+       gst_element_set_state (stream->udpsrc[0], demux->target);
+-      gst_element_set_state (stream->udpsrc[1], demux->target);
++      if (stream->udpsrc[1]) {
++        gst_element_set_state (stream->udpsrc[1], demux->target);
++      }
+     }
+   }
+   GST_SDP_STREAM_UNLOCK (demux);
+diff --git a/gst/sdp/gstsdpdemux.h b/gst/sdp/gstsdpdemux.h
+index 7862b3e704..f25a0e142b 100644
+--- a/gst/sdp/gstsdpdemux.h
++++ b/gst/sdp/gstsdpdemux.h
+@@ -99,6 +99,7 @@ struct _GstSDPDemux {
+   guint64           udp_timeout;
+   guint             latency;
+   gboolean          redirect;
++  gboolean          rtcp;
+ 
+   /* session management */
+   GstElement      *session;
