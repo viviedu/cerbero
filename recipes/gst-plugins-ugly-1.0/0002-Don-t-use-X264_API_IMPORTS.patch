@@ -1,0 +1,27 @@
+From aea81fac8dcc2884cf0fce616498ba35335ffb28 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <me@jakebarn.es>
+Date: Tue, 23 Jun 2020 16:37:59 +1000
+Subject: [PATCH] Don't use X264_API_IMPORTS
+
+---
+ ext/x264/gstx264enc.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ext/x264/gstx264enc.h b/ext/x264/gstx264enc.h
+index c7de48cf..4b635b8a 100644
+--- a/ext/x264/gstx264enc.h
++++ b/ext/x264/gstx264enc.h
+@@ -34,8 +34,8 @@
+  * compiler is unable to correctly do the pointer indirection for us, which
+  * leads to a segfault when you try to dereference any const values provided
+  * by x264.dll. See: https://bugzilla.gnome.org/show_bug.cgi?id=779249 */
+-#if defined(_WIN32) && !defined(X264_API_IMPORTS)
+-# define X264_API_IMPORTS
++#if defined(_WIN32) && defined(X264_API_IMPORTS)
++# undef X264_API_IMPORTS
+ #endif
+ #include <x264.h>
+ 
+-- 
+2.26.2.windows.1
+
