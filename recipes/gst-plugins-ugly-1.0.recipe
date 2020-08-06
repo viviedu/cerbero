@@ -14,7 +14,8 @@ class Recipe(custom.GStreamer):
     deps = ['gstreamer-1.0', 'gst-plugins-base-1.0', 'a52dec', 'opencore-amr',
             'libdvdread', 'x264']
 
-    patches = ['gst-plugins-ugly-1.0/0001-Add-missing-GST_STATIC_COMPILATION.patch']
+    patches = ['gst-plugins-ugly-1.0/0001-Add-missing-GST_STATIC_COMPILATION.patch',
+               'gst-plugins-ugly-1.0/0002-Don-t-use-X264_API_IMPORTS.patch']
 
     files_plugins_codecs_restricted = [
              'lib/gstreamer-1.0/libgsta52dec%(mext)s',
