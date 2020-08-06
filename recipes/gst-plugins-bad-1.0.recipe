@@ -4,10 +4,14 @@ from cerbero.tools.libtool import LibtoolLibrary
 class Recipe(custom.GStreamer):
     name = 'gst-plugins-bad-1.0'
     btype = BuildType.MESON
+    library_type = LibraryType.STATIC
     tarball_checksum = 'fadbf229dbb29cae15ecb1858382aee60f2fa82067673598791c5fdfc52ad2cc'
     # Explicitly enable plugins that we provide dependencies for to ensure that
     # we error out if they weren't found.
-    meson_options = {# enabled plugins
+    meson_options = {# static fixes
+                     'tests': 'disabled',
+                     'tools': 'disabled',
+                     # enabled plugins
                      'assrender': 'enabled',
                      'bz2': 'enabled',
                      'closedcaption': 'enabled',
@@ -72,6 +76,9 @@ class Recipe(custom.GStreamer):
             'pango', 'spandsp', 'webrtc-audio-processing', 'sbc', 'ladspa',
             'srt', 'libusrsctp', 'zbar']
     use_system_libs = True
+
+    patches = ['gst-plugins-bad-1.0/0001-Add-missing-GST_STATIC_COMPILATION.patch',
+               'gst-plugins-bad-1.0/0002-Add-missing-tools-meson-option.patch']
 
     files_lang = ['gst-plugins-bad-1.0']
 

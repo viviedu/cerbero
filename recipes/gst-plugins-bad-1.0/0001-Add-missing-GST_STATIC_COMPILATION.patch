@@ -1,0 +1,27 @@
+From 2314d195d39209fb49f14e3255d1b9bcc52fa0e0 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <me@jakebarn.es>
+Date: Thu, 6 Aug 2020 16:39:06 +1000
+Subject: [PATCH 1/2] Add missing GST_STATIC_COMPILATION
+
+---
+ meson.build | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/meson.build b/meson.build
+index 4f84134..89162a4 100644
+--- a/meson.build
++++ b/meson.build
+@@ -414,6 +414,10 @@ else
+ endif
+ 
+ gst_plugins_bad_args = ['-DHAVE_CONFIG_H']
++if get_option('default_library') == 'static'
++  gst_plugins_bad_args += ['-DGST_STATIC_COMPILATION']
++endif
++
+ configinc = include_directories('.')
+ libsinc = include_directories('gst-libs')
+ 
+-- 
+2.26.2.windows.1
+

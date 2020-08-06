@@ -1,0 +1,25 @@
+From bf4f1efcdfee0616cda4a2568f62e44c01654710 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <me@jakebarn.es>
+Date: Thu, 6 Aug 2020 16:26:33 +1000
+Subject: [PATCH] Add missing ORC_STATIC_COMPILATION
+
+---
+ meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index ee79274..6f4392e 100644
+--- a/meson.build
++++ b/meson.build
+@@ -245,7 +245,7 @@ core_conf.set('AUDIORESAMPLE_FORMAT_' + get_option('audioresample_format').to_up
+ 
+ gst_plugins_base_args = ['-DHAVE_CONFIG_H']
+ if get_option('default_library') == 'static'
+-  gst_plugins_base_args += ['-DGST_STATIC_COMPILATION']
++  gst_plugins_base_args += ['-DGST_STATIC_COMPILATION', '-DORC_STATIC_COMPILATION']
+ endif
+ 
+ # X11 checks are for sys/ and tests/
+-- 
+2.26.2.windows.1
+

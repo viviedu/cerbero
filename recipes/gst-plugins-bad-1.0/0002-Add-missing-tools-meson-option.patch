@@ -1,0 +1,40 @@
+From d1178cd7b3f29360f59896b8f39ba0173adaf6e4 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <me@jakebarn.es>
+Date: Thu, 6 Aug 2020 17:13:49 +1000
+Subject: [PATCH 2/2] Add missing tools meson option
+
+---
+ meson.build       | 4 +++-
+ meson_options.txt | 1 +
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/meson.build b/meson.build
+index 89162a4..c4ecbbc 100644
+--- a/meson.build
++++ b/meson.build
+@@ -447,7 +447,9 @@ subdir('sys')
+ subdir('ext')
+ subdir('tests')
+ subdir('data')
+-subdir('tools')
++if not get_option('tools').disabled()
++  subdir('tools')
++endif
+ subdir('pkgconfig')
+ 
+ # xgettext is optional (on Windows for instance)
+diff --git a/meson_options.txt b/meson_options.txt
+index 94cfa28..354579e 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -178,6 +178,7 @@ option('hls-crypto', type : 'combo', value : 'auto', choices : ['auto', 'nettle'
+ # Common feature options
+ option('examples', type : 'feature', value : 'auto', yield : true)
+ option('tests', type : 'feature', value : 'auto', yield : true)
++option('tools', type : 'feature', value : 'auto', yield : true)
+ option('introspection', type : 'feature', value : 'auto', yield : true, description : 'Generate gobject-introspection bindings')
+ option('nls', type : 'feature', value : 'auto', yield: true, description : 'Enable native language support (translations)')
+ option('orc', type : 'feature', value : 'auto', yield : true)
+-- 
+2.26.2.windows.1
+
