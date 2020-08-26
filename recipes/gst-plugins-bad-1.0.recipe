@@ -71,9 +71,7 @@ class Recipe(custom.GStreamer):
     use_system_libs = True
 
     patches = [
-        # enable line below to enable 48k sink output.
-        # this works fine for goldfinger, but might not be suitable for other devices.
-        # 'gst-plugins-bad-1.0/0001-opensles-add-48k-audio-caps.patch',
+        'gst-plugins-bad-1.0/0001-openslessink-Allow-openslessink-to-handle-48kHz-streams.patch',
         'gst-plugins-bad-1.0/0002-Avoid-issues-with-buffer-cleanup-while-flushing.patch',
         'gst-plugins-bad-1.0/0003-sdpdemux-Add-property-to-disable-RTCP.patch'
     ]

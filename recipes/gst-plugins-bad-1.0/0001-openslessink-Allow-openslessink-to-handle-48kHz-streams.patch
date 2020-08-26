@@ -1,0 +1,30 @@
+From 3e2d86ea18bebf7dfa5e147135574592f952f5aa Mon Sep 17 00:00:00 2001
+From: Matthew Read <matthew@ekioh.com>
+Date: Sat, 29 Feb 2020 12:49:06 +0000
+Subject: [PATCH] openslessink: Allow openslessink to handle 48kHz streams.
+
+The most common audio sample rate in AV streams is 48kHz, and the most
+common device output sample rate is 48kHz. This allows handing of 48kHz
+input streams without resampling.
+
+Remove comments about avoiding the use of 48kHz.
+---
+ sys/opensles/openslessink.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/sys/opensles/openslessink.c b/sys/opensles/openslessink.c
+index c4c049208e..416d0e981f 100644
+--- a/sys/opensles/openslessink.c
++++ b/sys/opensles/openslessink.c
+@@ -57,10 +57,7 @@ enum
+ 
+ 
+ /* According to Android's NDK doc the following are the supported rates */
+-#define RATES "8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100"
+-/* 48000 Hz is also claimed to be supported but the AudioFlinger downsampling
+- * doesn't seems to work properly so we relay GStreamer audioresample element
+- * to cope with this samplerate. */
++#define RATES "8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000"
+ 
+ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+     GST_PAD_SINK,
