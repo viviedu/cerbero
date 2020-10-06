@@ -69,7 +69,8 @@ class Recipe(custom.GStreamer):
             'srt', 'libusrsctp']
     use_system_libs = True
 
-    patches = ['gst-plugins-bad-1.0/0001-avfvideosrc-Fix-incorrect-scaling-factor.patch']
+    patches = ['gst-plugins-bad-1.0/0001-avfvideosrc-Fix-incorrect-scaling-factor.patch',
+               'gst-plugins-bad-1.0/0002-avfvideosrc-wait-for-permissions-request-dialog-callback.patch']
 
     files_lang = ['gst-plugins-bad-1.0']
 

@@ -1,0 +1,45 @@
+From eebfed0726d25f7be559a650a2ca22cb8a89917a Mon Sep 17 00:00:00 2001
+From: Kevin King <4kevinking@gmail.com>
+Date: Tue, 23 Jun 2020 15:31:51 -0700
+Subject: [PATCH] avfvideosrc: wait for permissions request dialog callback
+
+otherwise gstreamer gives up on transitioning the pipeline before the
+user has accepted
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gst-plugins-bad/-/merge_requests/1370>
+---
+ sys/applemedia/avfvideosrc.m | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/sys/applemedia/avfvideosrc.m b/sys/applemedia/avfvideosrc.m
+index 147e46435b..081aa9a9fc 100644
+--- a/sys/applemedia/avfvideosrc.m
++++ b/sys/applemedia/avfvideosrc.m
+@@ -452,13 +452,24 @@ static AVCaptureVideoOrientation GstAVFVideoSourceOrientation2AVCaptureVideoOrie
+         GST_DEBUG_OBJECT (element, "Device video access permission has already been granted");
+         break;
+       case AVAuthorizationStatusNotDetermined:
++        ;
+         // Explicit user permission is required for media capture,
+         // but the user has not yet granted or denied such permission.
++        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+         dispatch_sync (mainQueue, ^{
+           [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+             GST_DEBUG_OBJECT (element, "Device video access permission %s", granted ? "granted" : "not granted");
++            dispatch_semaphore_signal(sema);
+           }];
+         });
++        // Block on dialog being answered
++        if (![NSThread isMainThread]) {
++            dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
++        } else {
++            while (dispatch_semaphore_wait(sema, DISPATCH_TIME_NOW)) {
++                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0]];
++            }
++        }
+         // Check if permission has been granted
+         AVAuthorizationStatus videoAuthorizationStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+         if (videoAuthorizationStatus != AVAuthorizationStatusAuthorized) {
+-- 
+GitLab
+
