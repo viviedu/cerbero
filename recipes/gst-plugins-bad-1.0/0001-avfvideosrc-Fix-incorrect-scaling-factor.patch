@@ -1,0 +1,43 @@
+From 60f2684a1833104a656767cc9c4692c9763bf50d Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jakerodneybarnes@gmail.com>
+Date: Thu, 30 Jul 2020 15:48:44 +1000
+Subject: [PATCH] avfvideosrc: Fix incorrect scaling factor
+
+---
+ sys/applemedia/avfvideosrc.m | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/sys/applemedia/avfvideosrc.m b/sys/applemedia/avfvideosrc.m
+index 25e0e3483..1aa5635ab 100644
+--- a/sys/applemedia/avfvideosrc.m
++++ b/sys/applemedia/avfvideosrc.m
+@@ -584,15 +584,22 @@ checked:
+ - (float)getScaleFactorFromDeviceIndex
+ {
+   NSArray *screens = [NSScreen screens];
++  NSScreen *screen;
++  NSDictionary *description;
+ 
+-  if (deviceIndex == DEFAULT_DEVICE_INDEX)
+-    return [[NSScreen mainScreen] backingScaleFactor];
+-  if (deviceIndex >= [screens count]) {
++  if (deviceIndex == DEFAULT_DEVICE_INDEX) {
++    screen = [NSScreen mainScreen];
++  } else if (deviceIndex >= [screens count]) {
+     GST_ELEMENT_ERROR (element, RESOURCE, NOT_FOUND,
+                         ("Invalid screen capture device index"), (NULL));
+     return 1.0;
++  } else {
++    screen = [screens objectAtIndex:deviceIndex];
+   }
+-  return [[screens objectAtIndex:deviceIndex] backingScaleFactor];
++  description = [screen deviceDescription];
++  NSSize resolution = [[description objectForKey:@"NSDeviceResolution"] sizeValue];
++  float backingScaleFactor = (int) resolution.width / 72;
++  return backingScaleFactor;
+ }
+ #endif
+ 
+-- 
+2.27.0
+
