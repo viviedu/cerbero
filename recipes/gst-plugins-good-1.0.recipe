@@ -37,7 +37,8 @@ class Recipe(custom.GStreamer):
                'gst-plugins-good-1.0/0002-souphttpsrc-Always-apply-proxy.patch',
                'gst-plugins-good-1.0/0003-gstsouphttpsrc-remove-shared-session-check-in-auth.patch',
                'gst-plugins-good-1.0/0004-souphttpsrc-Disable-cookie-jar-when-cookies-property.patch',
-               'gst-plugins-good-1.0/0005-soup-Just-set-User-Agent-on-the-session.patch']
+               'gst-plugins-good-1.0/0005-soup-Just-set-User-Agent-on-the-session.patch',
+               'gst-plugins-good-1.0/0006-Set-proxy-username-and-password-from-env-var.patch']
 
     files_lang = ['gst-plugins-good-1.0']
 
