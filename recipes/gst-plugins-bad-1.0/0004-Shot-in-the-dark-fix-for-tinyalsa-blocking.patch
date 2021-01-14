@@ -1,3 +1,13 @@
+From ac1af57aeb2f3f1a8d4874ba9eb78af7214095c7 Mon Sep 17 00:00:00 2001
+From: Andrew Pritchard <andrew@vivi.io>
+Date: Thu, 14 Jan 2021 15:39:39 +1100
+Subject: [PATCH] Shot in the dark fix for tinyalsa blocking
+
+---
+ sys/tinyalsa/tinyalsasink.c | 13 +++++++++++++
+ sys/tinyalsa/tinyalsasink.h |  3 +++
+ 2 files changed, 16 insertions(+)
+
 diff --git a/sys/tinyalsa/tinyalsasink.c b/sys/tinyalsa/tinyalsasink.c
 index 7d6bf804b..0d5f88ba7 100644
 --- a/sys/tinyalsa/tinyalsasink.c
@@ -64,3 +74,6 @@ index a6ae3bfc8..b07c86313 100644
  
    struct pcm *pcm;
  
+-- 
+2.29.2
+
