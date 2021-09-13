@@ -1,0 +1,95 @@
+From e7e51af8e8bf256b2de5e32de409b817d5fe27dd Mon Sep 17 00:00:00 2001
+From: Tristan Penman <tristan@tristanpenman.com>
+Date: Mon, 13 Sep 2021 14:53:37 +1000
+Subject: [PATCH] Shot in the dark to enable low-latency mode for Android
+
+---
+ sys/androidmedia/gstamc.c | 34 ++++++++++++++++++++++++++++++++--
+ 1 file changed, 32 insertions(+), 2 deletions(-)
+
+diff --git a/sys/androidmedia/gstamc.c b/sys/androidmedia/gstamc.c
+index 3a568e759..2c989888c 100644
+--- a/sys/androidmedia/gstamc.c
++++ b/sys/androidmedia/gstamc.c
+@@ -109,6 +109,7 @@ static struct
+   jmethodID set_string;
+   jmethodID get_byte_buffer;
+   jmethodID set_byte_buffer;
++  jmethodID set_feature_enabled;
+ } media_format;
+ 
+ static GstAmcBuffer *gst_amc_codec_get_input_buffers (GstAmcCodec * codec,
+@@ -658,7 +659,9 @@ gst_amc_format_new_video (const gchar * mime, gint width, gint height,
+ {
+   JNIEnv *env;
+   GstAmcFormat *format = NULL;
+-  jstring mime_str;
++  jstring mime_str = NULL;
++  jstring feature_str = NULL;
++  jstring priority_str = NULL;
+ 
+   g_return_val_if_fail (mime != NULL, NULL);
+ 
+@@ -668,6 +671,14 @@ gst_amc_format_new_video (const gchar * mime, gint width, gint height,
+   if (!mime_str)
+     goto error;
+ 
++  feature_str = gst_amc_jni_string_from_gchar (env, err, FALSE, "vendor.low-latency.enable");
++  if (!feature_str)
++    goto error;
++
++  priority_str = gst_amc_jni_string_from_gchar (env, err, FALSE, "priority");
++  if (!priority_str)
++    goto error;
++
+   format = g_slice_new0 (GstAmcFormat);
+   format->object =
+       gst_amc_jni_new_object_from_static (env, err, TRUE, media_format.klass,
+@@ -675,11 +686,27 @@ gst_amc_format_new_video (const gchar * mime, gint width, gint height,
+   if (!format->object)
+     goto error;
+ 
++  if (!gst_amc_jni_call_void_method (env, &err, format->object,
++      media_format.set_feature_enabled, feature_str, 1))
++    goto error;
++
++  if (!gst_amc_jni_call_void_method (env, &err, format->object,
++      media_format.set_integer, priority_str, 0))
++    goto error;
++
+ done:
+   if (mime_str)
+     gst_amc_jni_object_local_unref (env, mime_str);
+   mime_str = NULL;
+ 
++  if (feature_str)
++    gst_amc_jni_object_local_unref (env, feature_str);
++  feature_str = NULL;
++
++  if (priority_str)
++    gst_amc_jni_object_local_unref (env, priority_str);
++  priority_str = NULL;
++
+   return format;
+ 
+ error:
+@@ -1293,12 +1320,15 @@ get_java_classes (void)
+   media_format.set_byte_buffer =
+       (*env)->GetMethodID (env, media_format.klass, "setByteBuffer",
+       "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V");
++  media_format.set_feature_enabled =
++      (*env)->GetMethodID (env, media_format.klass, "setFeatureEnabled",
++      "(Ljava/lang/String;Z)V");
+   if (!media_format.create_audio_format || !media_format.create_video_format
+       || !media_format.contains_key || !media_format.get_float
+       || !media_format.set_float || !media_format.get_integer
+       || !media_format.set_integer || !media_format.get_string
+       || !media_format.set_string || !media_format.get_byte_buffer
+-      || !media_format.set_byte_buffer) {
++      || !media_format.set_byte_buffer || !media_format.set_feature_enabled) {
+     ret = FALSE;
+     GST_ERROR ("Failed to get format methods");
+     if ((*env)->ExceptionCheck (env)) {
+-- 
+2.23.0
+
