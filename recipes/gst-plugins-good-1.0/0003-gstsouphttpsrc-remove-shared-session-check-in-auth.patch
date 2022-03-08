@@ -1,6 +1,6 @@
-From 185ccecb1f0af3a694dca1e5617538ef56cc6a0c Mon Sep 17 00:00:00 2001
-From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
-Date: Wed, 4 Dec 2019 14:06:09 +1100
+From 77a7e51263d69898f7ad8e1b85372da2f31aa243 Mon Sep 17 00:00:00 2001
+From: Cerbero Build System <cerbero@gstreamer.freedesktop.org>
+Date: Fri, 11 Mar 2022 02:59:24 +0000
 Subject: [PATCH] gstsouphttpsrc: remove shared session check in auth_cb
 
 ---
@@ -8,26 +8,26 @@ Subject: [PATCH] gstsouphttpsrc: remove shared session check in auth_cb
  1 file changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
-index a00a2bb..2d20465 100644
+index 7204c1b..003a113 100644
 --- a/ext/soup/gstsouphttpsrc.c
 +++ b/ext/soup/gstsouphttpsrc.c
-@@ -1053,9 +1053,14 @@ static void
- gst_soup_http_src_authenticate_cb (SoupSession * session, SoupMessage * msg,
-     SoupAuth * auth, gboolean retrying, GstSoupHTTPSrc * src)
- {
+@@ -1282,9 +1282,14 @@ gst_soup_http_src_authenticate_cb (SoupMessage * msg, SoupAuth * auth,
+   GstSoupHTTPSrc *src = GST_SOUP_HTTP_SRC (data);
+   SoupStatus status_code;
+ 
 -  /* Might be from another user of the shared session */
 -  if (!GST_IS_SOUP_HTTP_SRC (src) || msg != src->msg)
 +  /* removing (msg != src->msg) check as this breaks authentication
 +   * original comment stated: "Might be from another user of the shared session"
-+   * however, we cannot have a shared session if proxy != NULL (see line:923)
++   * however, we cannot have a shared session if proxy != NULL (see line:DUNNO_LOL)
 +   * and src->msg is not actually used in the logic below (plus src->msg->status_code == 0)
 +   */
 +  if (!GST_IS_SOUP_HTTP_SRC (src)) {
-     return;
+     return FALSE;
 +  }
  
-   if (!retrying) {
-     /* First time authentication only, if we fail and are called again with retry true fall through */
+   status_code = _soup_message_get_status (msg);
+ 
 -- 
-2.17.1
+2.30.2
 

@@ -1,20 +1,21 @@
-From 36964d37a5142044a61993ac0f5cd8ccd9404bca Mon Sep 17 00:00:00 2001
-From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
-Date: Fri, 10 Dec 2021 16:20:09 +1100
-Subject: [PATCH] amcvideodec: add property to control frame droppin
+From 9e3792407ccc306b1b924f13910fa457f8104ff6 Mon Sep 17 00:00:00 2001
+From: Cerbero Build System <cerbero@gstreamer.freedesktop.org>
+Date: Thu, 10 Mar 2022 23:18:48 +0000
+Subject: [PATCH] amcvideodec: add property to control frame dropping
 
+Added by Mark Fernie
 ---
  sys/androidmedia/gstamcvideodec.c | 60 +++++++++++++++++++++++++++++--
  sys/androidmedia/gstamcvideodec.h |  4 +++
  2 files changed, 62 insertions(+), 2 deletions(-)
 
 diff --git a/sys/androidmedia/gstamcvideodec.c b/sys/androidmedia/gstamcvideodec.c
-index d880c58..7e46c2e 100644
+index f03f829..888ae3f 100644
 --- a/sys/androidmedia/gstamcvideodec.c
 +++ b/sys/androidmedia/gstamcvideodec.c
-@@ -255,9 +255,13 @@ static void
- gst_amc_video_dec_on_frame_available (JNIEnv * env, jobject thiz,
-     long long context, jobject surfaceTexture);
+@@ -247,9 +247,13 @@ static void
+ gst_amc_video_dec_on_frame_available (GstAmcSurfaceTexture * texture,
+     gpointer user_data);
  
 +/* properties */
 +#define DEFAULT_DROP_FRAMES       TRUE
@@ -27,7 +28,7 @@ index d880c58..7e46c2e 100644
  };
  
  /* class initialization */
-@@ -338,6 +342,38 @@ caps_to_mime (GstCaps * caps)
+@@ -330,6 +334,38 @@ caps_to_mime (GstCaps * caps)
    return NULL;
  }
  
@@ -66,7 +67,7 @@ index d880c58..7e46c2e 100644
  static void
  gst_amc_video_dec_base_init (gpointer g_class)
  {
-@@ -396,8 +432,25 @@ gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass)
+@@ -388,8 +424,25 @@ gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass)
  
    parent_class = g_type_class_peek_parent (klass);
  
@@ -92,7 +93,7 @@ index d880c58..7e46c2e 100644
    element_class->change_state =
        GST_DEBUG_FUNCPTR (gst_amc_video_dec_change_state);
    element_class->set_context =
-@@ -430,6 +483,9 @@ gst_amc_video_dec_init (GstAmcVideoDec * self)
+@@ -422,6 +475,9 @@ gst_amc_video_dec_init (GstAmcVideoDec * self)
    g_cond_init (&self->gl_cond);
  
    self->gl_queue = g_queue_new ();
@@ -102,7 +103,7 @@ index d880c58..7e46c2e 100644
  }
  
  static gboolean
-@@ -1414,7 +1470,7 @@ retry:
+@@ -1389,7 +1445,7 @@ retry:
  
    is_eos = ! !(buffer_info.flags & BUFFER_FLAG_END_OF_STREAM);
  
@@ -112,7 +113,7 @@ index d880c58..7e46c2e 100644
            gst_video_decoder_get_max_decode_time (GST_VIDEO_DECODER (self),
                frame)) < 0) {
 diff --git a/sys/androidmedia/gstamcvideodec.h b/sys/androidmedia/gstamcvideodec.h
-index 039a785..d3d8d29 100644
+index af3e000..a096b97 100644
 --- a/sys/androidmedia/gstamcvideodec.h
 +++ b/sys/androidmedia/gstamcvideodec.h
 @@ -74,6 +74,10 @@ struct _GstAmcVideoDec
@@ -127,5 +128,4 @@ index 039a785..d3d8d29 100644
    gsize codec_data_size;
    /* TRUE if the component is configured and saw
 -- 
-2.17.1
-
+2.30.2

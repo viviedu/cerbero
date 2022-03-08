@@ -1,4 +1,4 @@
-FROM debian:buster
+FROM debian:bullseye
 
 WORKDIR /workspace
 
@@ -8,6 +8,7 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y \
         python3 \
+        python3-distro \
         sudo \
         && \
     apt-get clean
