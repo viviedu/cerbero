@@ -1,0 +1,29 @@
+From d4ddb1af4d128833f5da3b25b8e0f21ce03194f7 Mon Sep 17 00:00:00 2001
+From: Andrew Pritchard <andrew@vivi.io>
+Date: Fri, 25 Mar 2022 14:25:02 +1100
+Subject: [PATCH] Fix GstAmcSurfaceTexture segfault Check that `self` and
+ `self->callback` are defined. `self` can be set to `NULL` in
+ `remove_listener`, and `self->callback` can be set to `NULL` inside
+ `gst_amc_surface_texture_jni_set_on_frame_available_callback`. This can cause
+ a segfault since the Java object can outlive the C object, and call the
+ callback after `remove_listener` is called.
+
+---
+ sys/androidmedia/jni/gstamcsurfacetexture-jni.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sys/androidmedia/jni/gstamcsurfacetexture-jni.c b/sys/androidmedia/jni/gstamcsurfacetexture-jni.c
+index 17e252529b..ec573de4f8 100644
+--- a/sys/androidmedia/jni/gstamcsurfacetexture-jni.c
++++ b/sys/androidmedia/jni/gstamcsurfacetexture-jni.c
+@@ -243,6 +243,8 @@ on_frame_available_cb (JNIEnv * env, jobject thiz,
+     long long context, jobject surfaceTexture)
+ {
+   GstAmcSurfaceTextureJNI *self = JLONG_TO_GPOINTER (context);
++  if (!self || !self->callback)
++    return;
+ 
+   self->callback (GST_AMC_SURFACE_TEXTURE (self), self->user_data);
+ }
+-- 
+2.32.0 (Apple Git-132)
