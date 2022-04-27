@@ -1,5 +1,6 @@
 # -*- Mode: Python -*- vi:si:et:sw=4:sts=4:ts=4:syntax=python
 import os
+import sys
 from collections import defaultdict
 
 from cerbero.build import recipe
@@ -131,6 +132,7 @@ def list_gstreamer_1_0_plugins_by_category(config):
                   'gst-libav-1.0', 'gst-editing-services-1.0', 'gst-rtsp-server-1.0']:
             r = cookbook.get_recipe(r)
             for attr_name in dir(r):
+                print("attribute name", attr_name, file=sys.stderr)
                 if attr_name.startswith('files_plugins_'):
                     cat_name = attr_name[len('files_plugins_'):]
                     plugins_list = getattr(r, attr_name)
@@ -141,6 +143,7 @@ def list_gstreamer_1_0_plugins_by_category(config):
                 else:
                     continue
                 for e in plugins_list:
+                    print("plugin", e, file=sys.stderr)
                     if not e.startswith('lib/gstreamer-'):
                         continue
                     c = e.split('/')
@@ -155,4 +158,5 @@ def list_gstreamer_1_0_plugins_by_category(config):
                     else:
                         e = e[3:-8]
                     plugins[cat_name].append(e)
+        print("plugin end\n\n\n\n\n\n\n\n\n\n\n\n\n\n", file=sys.stderr)
         return plugins
