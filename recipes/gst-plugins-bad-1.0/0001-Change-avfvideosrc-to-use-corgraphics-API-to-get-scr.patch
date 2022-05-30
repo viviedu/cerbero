@@ -1,0 +1,69 @@
+From e9a422d9e01da741046e04c9dee2e21afda7fd97 Mon Sep 17 00:00:00 2001
+From: Andrew Pritchard <andrew@vivi.io>
+Date: Mon, 30 May 2022 09:48:37 +1000
+Subject: [PATCH] Change avfvideosrc to use corgraphics API to get screen
+ resolution
+
+VIVI-5434
+---
+ sys/applemedia/avfvideosrc.m | 26 +++++++-------------------
+ 1 file changed, 7 insertions(+), 19 deletions(-)
+
+diff --git a/sys/applemedia/avfvideosrc.m b/sys/applemedia/avfvideosrc.m
+index e357eb035e..af57f44f91 100644
+--- a/sys/applemedia/avfvideosrc.m
++++ b/sys/applemedia/avfvideosrc.m
+@@ -222,7 +222,6 @@ - (void)closeDevice;
+ - (GstVideoFormat)getGstVideoFormat:(NSNumber *)pixel_format;
+ #if !HAVE_IOS
+ - (CGDirectDisplayID)getDisplayIdFromDeviceIndex;
+-- (float)getScaleFactorFromDeviceIndex;
+ #endif
+ - (GstCaps *)getDeviceCaps;
+ - (BOOL)setDeviceCaps:(GstVideoInfo *)info;
+@@ -591,20 +590,6 @@ - (CGDirectDisplayID)getDisplayIdFromDeviceIndex
+   displayId = [description objectForKey:@"NSScreenNumber"];
+   return [displayId unsignedIntegerValue];
+ }
+-
+-- (float)getScaleFactorFromDeviceIndex
+-{
+-  NSArray *screens = [NSScreen screens];
+-
+-  if (deviceIndex == DEFAULT_DEVICE_INDEX)
+-    return [[NSScreen mainScreen] backingScaleFactor];
+-  if (deviceIndex >= [screens count]) {
+-    GST_ELEMENT_ERROR (element, RESOURCE, NOT_FOUND,
+-                        ("Invalid screen capture device index"), (NULL));
+-    return 1.0;
+-  }
+-  return [[screens objectAtIndex:deviceIndex] backingScaleFactor];
+-}
+ #endif
+ 
+ 
+@@ -771,14 +756,17 @@ - (GstCaps *)getCaps
+ 
+   if (captureScreen) {
+ #if !HAVE_IOS
+-    CGRect rect = CGDisplayBounds ([self getDisplayIdFromDeviceIndex]);
+-    float scale = [self getScaleFactorFromDeviceIndex];
++    const CGDisplayModeRef display_mode = CGDisplayCopyDisplayMode([self getDisplayIdFromDeviceIndex]);
++    const int width = CGDisplayModeGetPixelWidth(display_mode);
++    const int height = CGDisplayModeGetPixelHeight(display_mode);
++    CGDisplayModeRelease(mode);
++
+     for (NSNumber *pixel_format in pixel_formats) {
+       GstVideoFormat gst_format = [self getGstVideoFormat:pixel_format];
+       if (gst_format != GST_VIDEO_FORMAT_UNKNOWN)
+         gst_caps_append (result, gst_caps_new_simple ("video/x-raw",
+-            "width", G_TYPE_INT, (int)(rect.size.width * scale),
+-            "height", G_TYPE_INT, (int)(rect.size.height * scale),
++            "width", G_TYPE_INT, width,
++            "height", G_TYPE_INT, height,
+             "format", G_TYPE_STRING, gst_video_format_to_string (gst_format),
+             NULL));
+     }
+-- 
+2.32.0 (Apple Git-132)
+
