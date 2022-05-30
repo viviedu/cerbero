@@ -86,7 +86,9 @@ class Recipe(recipe.Recipe):
     async def configure(self):
         if self.config.target_platform in [Platform.IOS, Platform.DARWIN]:
             if Architecture.is_arm(self.config.target_arch):
-                arch = 'arm'
+                # Vivi: build/dist/darwin_arm64/lib/glib-2.0/include/arm/glibconfig.h is not a real path
+                # but build/dist/darwin_arm64/lib/glib-2.0/include/arm64/glibconfig.h is.
+                arch = 'arm64'
             elif self.config.target_arch == Architecture.X86:
                 arch = 'i386'
             else:
