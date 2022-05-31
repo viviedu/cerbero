@@ -51,7 +51,7 @@ index e357eb035e..af57f44f91 100644
 +    const CGDisplayModeRef display_mode = CGDisplayCopyDisplayMode([self getDisplayIdFromDeviceIndex]);
 +    const int width = CGDisplayModeGetPixelWidth(display_mode);
 +    const int height = CGDisplayModeGetPixelHeight(display_mode);
-+    CGDisplayModeRelease(mode);
++    CGDisplayModeRelease(display_mode);
 +
      for (NSNumber *pixel_format in pixel_formats) {
        GstVideoFormat gst_format = [self getGstVideoFormat:pixel_format];
