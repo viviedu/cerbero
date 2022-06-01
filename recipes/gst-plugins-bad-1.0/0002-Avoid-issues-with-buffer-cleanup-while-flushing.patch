@@ -1,0 +1,45 @@
+From 2c3295af94940a3ee4b769cc6b53e3a816ecbd62 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jake@vivi.io>
+Date: Tue, 28 Apr 2020 15:08:06 +1000
+Subject: [PATCH] Avoid issues with buffer cleanup while flushing
+
+---
+ sys/androidmedia/gstamcvideodec.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/sys/androidmedia/gstamcvideodec.c b/sys/androidmedia/gstamcvideodec.c
+index 6ca6dd2..d880c58 100644
+--- a/sys/androidmedia/gstamcvideodec.c
++++ b/sys/androidmedia/gstamcvideodec.c
+@@ -962,7 +962,7 @@ _gl_sync_release_buffer (struct gl_sync *sync, gboolean render)
+ 
+ out:
+   if (error) {
+-    if (sync->sink->gl_error == NULL)
++    if (!sync->sink->flushing && sync->sink->gl_error == NULL)
+       sync->sink->gl_error = error;
+     else
+       g_clear_error (&error);
+@@ -1230,6 +1230,9 @@ _amc_gl_wait_gl (GstGLContext * context, struct gl_wait *wait)
+ {
+   struct gl_sync *sync = wait->sync_meta->data;
+ 
++  if (sync->sink->flushing)
++    return;
++
+   g_mutex_lock (&sync->sink->gl_lock);
+   wait->ret = _amc_gl_iterate_queue_unlocked (wait->sync_meta, TRUE);
+   g_mutex_unlock (&sync->sink->gl_lock);
+@@ -1241,6 +1244,9 @@ _amc_gl_wait (GstGLSyncMeta * sync_meta, GstGLContext * context)
+   struct gl_sync *sync = sync_meta->data;
+   struct gl_wait wait;
+ 
++  if (sync->sink->flushing)
++    return;
++
+   wait.sync_meta = sync_meta;
+   wait.ret = FALSE;
+   gst_gl_context_thread_add (context,
+-- 
+2.26.2
+

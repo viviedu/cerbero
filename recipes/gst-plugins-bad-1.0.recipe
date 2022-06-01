@@ -23,7 +23,7 @@ class Recipe(custom.GStreamer):
                      'dts': 'enabled',
                      'hls': 'enabled',
                      'hls-crypto': 'openssl',
-                     'kate': 'enabled',
+                     'kate': 'disabled',
                      'ladspa': 'auto', # lrdf is optional
                      'nvcodec': 'enabled',
                      'openh264': 'enabled',
@@ -46,6 +46,7 @@ class Recipe(custom.GStreamer):
                      'webrtc': 'enabled',
                      'webrtcdsp': 'enabled',
                      'zbar': 'enabled',
+                     'tinyalsa': 'enabled',
                      # disabled plugins
                      'curl': 'disabled',
                      'curl-ssh2': 'disabled',
@@ -73,12 +74,23 @@ class Recipe(custom.GStreamer):
                      'wildmidi': 'disabled',
                     }
     deps = ['gstreamer-1.0', 'gst-plugins-base-1.0', 'bzip2', 'libass',
-            'libkate', 'zlib', 'openh264', 'opus', 'librtmp', 'libxml2',
+            'zlib', 'openh264', 'opus', 'librtmp', 'libxml2',
             'libsrtp', 'libdca', 'libdvdnav', 'libnice',
             'soundtouch', 'vo-aacenc', 'librsvg', 'openjpeg',
             'pango', 'spandsp', 'webrtc-audio-processing', 'sbc', 'ladspa',
-            'srt', 'zbar']
+            'srt', 'zbar', 'tinyalsa']
     use_system_libs = True
+
+    patches = [
+        # enable line below to enable 48k sink output.
+        # this works fine for goldfinger, but might not be suitable for other devices.
+        # 'gst-plugins-bad-1.0/0001-opensles-add-48k-audio-caps.patch',
+        'gst-plugins-bad-1.0/0002-Avoid-issues-with-buffer-cleanup-while-flushing.patch',
+        'gst-plugins-bad-1.0/0003-sdpdemux-Add-property-to-disable-RTCP.patch',
+        'gst-plugins-bad-1.0/0004-Shot-in-the-dark-fix-for-tinyalsa-blocking.patch',
+        'gst-plugins-bad-1.0/0005-amcvideodec-add-property-to-control-frame-droppin.patch',
+        'gst-plugins-bad-1.0/0006-null-check-for-context.patch'
+    ]
 
     files_lang = ['gst-plugins-bad-1.0']
 
@@ -208,7 +220,6 @@ class Recipe(custom.GStreamer):
              'lib/gstreamer-1.0/libgstdvdspu%(mext)s',
              'lib/gstreamer-1.0/libgsthls%(mext)s',
              'lib/gstreamer-1.0/libgstid3tag%(mext)s',
-             'lib/gstreamer-1.0/libgstkate%(mext)s',
              'lib/gstreamer-1.0/libgstmidi%(mext)s',
              'lib/gstreamer-1.0/libgstmxf%(mext)s',
              'lib/gstreamer-1.0/libgstopenh264%(mext)s',
@@ -241,7 +252,6 @@ class Recipe(custom.GStreamer):
              'lib/gstreamer-1.0/libgstdvdspu.a', 'lib/gstreamer-1.0/libgstdvdspu.la',
              'lib/gstreamer-1.0/libgsthls.a', 'lib/gstreamer-1.0/libgsthls.la',
              'lib/gstreamer-1.0/libgstid3tag.a', 'lib/gstreamer-1.0/libgstid3tag.la',
-             'lib/gstreamer-1.0/libgstkate.a', 'lib/gstreamer-1.0/libgstkate.la',
              'lib/gstreamer-1.0/libgstmidi.a', 'lib/gstreamer-1.0/libgstmidi.la',
              'lib/gstreamer-1.0/libgstmxf.a', 'lib/gstreamer-1.0/libgstmxf.la',
              'lib/gstreamer-1.0/libgstopenh264.a', 'lib/gstreamer-1.0/libgstopenh264.la',
@@ -420,6 +430,7 @@ class Recipe(custom.GStreamer):
             ],
         Platform.ANDROID: [
              'lib/gstreamer-1.0/libgstopensles%(mext)s',
+             'lib/gstreamer-1.0/libgsttinyalsa%(mext)s',
             ]
     }
 
@@ -445,6 +456,7 @@ class Recipe(custom.GStreamer):
             ],
         Platform.ANDROID: [
              'lib/gstreamer-1.0/libgstopensles.a', 'lib/gstreamer-1.0/libgstopensles.la',
+             'lib/gstreamer-1.0/libgsttinyalsa.a',
             ]
     }
 
@@ -546,7 +558,6 @@ class Recipe(custom.GStreamer):
             self.disable_plugin('closedcaption', 'effects', dep='pango')
             self.disable_plugin('dash', 'codecs', dep='libxml2')
             self.disable_plugin('dtsdec', 'codecs_restricted', option='dts', dep='libdca')
-            self.disable_plugin('kate', 'codecs', dep='libkate')
             self.disable_plugin('ladspa', 'effects', dep='ladspa')
             self.disable_plugin('openjpeg', 'codecs', dep='openjpeg')
             self.disable_plugin('rtmp', 'net_restricted', option='rtmp', dep='librtmp')

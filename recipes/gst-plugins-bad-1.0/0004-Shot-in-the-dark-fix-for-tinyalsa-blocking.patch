@@ -1,0 +1,79 @@
+From ac1af57aeb2f3f1a8d4874ba9eb78af7214095c7 Mon Sep 17 00:00:00 2001
+From: Andrew Pritchard <andrew@vivi.io>
+Date: Thu, 14 Jan 2021 15:39:39 +1100
+Subject: [PATCH] Shot in the dark fix for tinyalsa blocking
+
+---
+ sys/tinyalsa/tinyalsasink.c | 13 +++++++++++++
+ sys/tinyalsa/tinyalsasink.h |  3 +++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/sys/tinyalsa/tinyalsasink.c b/sys/tinyalsa/tinyalsasink.c
+index 7d6bf804b..0d5f88ba7 100644
+--- a/sys/tinyalsa/tinyalsasink.c
++++ b/sys/tinyalsa/tinyalsasink.c
+@@ -134,6 +134,12 @@ gst_tinyalsa_sink_getcaps (GstBaseSink * bsink, GstCaps * filter)
+ 
+   GST_OBJECT_LOCK (sink);
+ 
++  if (!sink->open) {
++    GST_OBJECT_UNLOCK (sink);
++    GST_DEBUG_OBJECT (sink, "device not open, using template caps");
++    return NULL;                /* base class will get template caps for us */
++  }
++
+   if (sink->cached_caps) {
+     GST_DEBUG_OBJECT (sink, "Returning cached caps");
+     caps = gst_caps_ref (sink->cached_caps);
+@@ -233,6 +239,9 @@ done:
+ static gboolean
+ gst_tinyalsa_sink_open (GstAudioSink * asink)
+ {
++  GstTinyalsaSink *sink = GST_TINYALSA_SINK (asink);
++  sink->open = true;
++
+   /* Nothing to do here, we can't call pcm_open() till we have stream
+    * parameters available */
+   return TRUE;
+@@ -375,6 +384,9 @@ gst_tinyalsa_sink_unprepare (GstAudioSink * asink)
+ static gboolean
+ gst_tinyalsa_sink_close (GstAudioSink * asink)
+ {
++  GstTinyalsaSink *sink = GST_TINYALSA_SINK (asink);
++  sink->open = false;
++
+   /* Nothing to do here, see gst_tinyalsa_sink_open() */
+   return TRUE;
+ }
+@@ -496,6 +508,7 @@ gst_tinyalsa_sink_init (GstTinyalsaSink * sink)
+ {
+   sink->card = DEFAULT_CARD;
+   sink->device = DEFAULT_DEVICE;
++  sink->open = false;
+ 
+   sink->cached_caps = NULL;
+ }
+diff --git a/sys/tinyalsa/tinyalsasink.h b/sys/tinyalsa/tinyalsasink.h
+index a6ae3bfc8..b07c86313 100644
+--- a/sys/tinyalsa/tinyalsasink.h
++++ b/sys/tinyalsa/tinyalsasink.h
+@@ -21,6 +21,8 @@
+ #ifndef __TINYALSASINK_H__
+ #define __TINYALSASINK_H__
+ 
++#include <stdbool.h>
++
+ #include <tinyalsa/asoundlib.h>
+ 
+ #include <gst/audio/gstaudiosink.h>
+@@ -42,6 +44,7 @@ struct _GstTinyalsaSink {
+ 
+   int card;
+   int device;
++  bool open;
+ 
+   struct pcm *pcm;
+ 
+-- 
+2.29.2
+
