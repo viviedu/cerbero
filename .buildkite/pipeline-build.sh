@@ -3,7 +3,7 @@ set -euo pipefail
 
 bootstrap=$(buildkite-agent meta-data get "bootstrap" --default "false")
 
-VIVI_FILENAME="gstreamer-1.0-android-universal-1.20.1-vivi-${BUILDKITE_BUILD_NUMBER}.tar.xz"
+VIVI_FILENAME="gstreamer-1.0-android-universal-1.20.3-vivi-${BUILDKITE_BUILD_NUMBER}.tar.xz"
 
 cat <<EOF
 env:
