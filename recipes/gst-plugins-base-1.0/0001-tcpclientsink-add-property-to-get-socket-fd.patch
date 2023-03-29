@@ -1,0 +1,83 @@
+From de50beb9521ab0fe8c324ebc8b881bad6fe7c67f Mon Sep 17 00:00:00 2001
+From: Mark Fernie <39318992+drmarkfernie@users.noreply.github.com>
+Date: Wed, 29 Mar 2023 16:53:31 +1100
+Subject: [PATCH] tcpclientsink: add property to get socket fd
+
+---
+ gst/tcp/gsttcpclientsink.c | 28 +++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/gst/tcp/gsttcpclientsink.c b/gst/tcp/gsttcpclientsink.c
+index 7a05dea..5851dad 100644
+--- a/gst/tcp/gsttcpclientsink.c
++++ b/gst/tcp/gsttcpclientsink.c
+@@ -61,7 +61,8 @@ enum
+ {
+   PROP_0,
+   PROP_HOST,
+-  PROP_PORT
++  PROP_PORT,
++  PROP_FD
+ };
+ 
+ static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
+@@ -80,6 +81,8 @@ static gboolean gst_tcp_client_sink_stop (GstBaseSink * bsink);
+ static gboolean gst_tcp_client_sink_unlock (GstBaseSink * bsink);
+ static gboolean gst_tcp_client_sink_unlock_stop (GstBaseSink * bsink);
+ 
++static int gst_tcp_client_sink_get_fd (GstBaseSink * bsink);
++
+ static void gst_tcp_client_sink_set_property (GObject * object, guint prop_id,
+     const GValue * value, GParamSpec * pspec);
+ static void gst_tcp_client_sink_get_property (GObject * object, guint prop_id,
+@@ -115,6 +118,11 @@ gst_tcp_client_sink_class_init (GstTCPClientSinkClass * klass)
+       g_param_spec_int ("port", "Port", "The port to send the packets to",
+           0, TCP_HIGHEST_PORT, TCP_DEFAULT_PORT,
+           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
++  g_object_class_install_property (gobject_class, PROP_FD,
++      g_param_spec_int ("file-descriptor", "file-descriptor",
++          "File Descriptor associated with socket",
++          -1, G_MAXINT, -1,
++          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+ 
+   gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
+ 
+@@ -246,6 +254,7 @@ gst_tcp_client_sink_set_property (GObject * object, guint prop_id,
+       tcpclientsink->port = g_value_get_int (value);
+       break;
+ 
++    case PROP_FD:
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -268,6 +277,9 @@ gst_tcp_client_sink_get_property (GObject * object, guint prop_id,
+     case PROP_PORT:
+       g_value_set_int (value, tcpclientsink->port);
+       break;
++    case PROP_FD:
++      g_value_set_int (value, gst_tcp_client_sink_get_fd(tcpclientsink));
++      break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -425,3 +437,17 @@ gst_tcp_client_sink_unlock_stop (GstBaseSink * bsink)
+ 
+   return TRUE;
+ }
++
++static int
++gst_tcp_client_sink_get_fd (GstBaseSink * bsink)
++{
++  GstTCPClientSink *sink = GST_TCP_CLIENT_SINK (bsink);
++  GST_DEBUG_OBJECT (sink, "get fd");
++  int fd = -1;
++  if ((sink->socket) && (GST_OBJECT_FLAG_IS_SET(sink, GST_TCP_CLIENT_SINK_OPEN))) {
++    fd = g_socket_get_fd(sink->socket);
++  } else {
++    GST_ERROR("socket is not open");
++  }
++  return fd;
++}
+-- 
+2.17.1
+
