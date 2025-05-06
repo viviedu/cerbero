@@ -9,9 +9,9 @@ class Recipe(custom.GStreamer):
                      # enabled plugins
                      'a52dec': 'enabled',
                      'dvdread': 'enabled',
-                     'x264': 'enabled'}
+                     'x264': 'disabled'}
     deps = ['gstreamer-1.0', 'gst-plugins-base-1.0', 'a52dec',
-            'libdvdread', 'x264']
+            'libdvdread']
 
     files_plugins_codecs_restricted = [
              '%(libdir)s/gstreamer-1.0/libgsta52dec%(mext)s',
