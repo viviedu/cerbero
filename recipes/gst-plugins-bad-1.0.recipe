@@ -91,6 +91,8 @@ class Recipe(custom.GStreamer):
             'srt', 'zbar', 'libltc', 'qrencode', 'json-glib']
     use_system_libs = True
 
+    patches = ['gst-plugins-bad-1.0/0001-Change-avfvideosrc-to-use-corgraphics-API-to-get-scr.patch']
+
     files_lang = ['gst-plugins-bad-1.0']
 
     files_libs = [

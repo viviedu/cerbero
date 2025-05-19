@@ -1,0 +1,70 @@
+From 0f750e359ca87f9c9104f92ea3b303e7d674bfe5 Mon Sep 17 00:00:00 2001
+From: Andrew Pritchard <andrew@vivi.io>
+Date: Mon, 30 May 2022 09:48:37 +1000
+Subject: [PATCH] Change avfvideosrc to use corgraphics API to get screen
+ resolution
+
+VIVI-5434
+---
+
+diff --git a/subprojects/gst-plugins-bad/sys/applemedia/avfvideosrc.m b/subprojects/gst-plugins-bad/sys/applemedia/avfvideosrc.m
+index 5a0e7c54b4..c7d2fce6ee 100644
+--- a/subprojects/gst-plugins-bad/sys/applemedia/avfvideosrc.m
++++ b/subprojects/gst-plugins-bad/sys/applemedia/avfvideosrc.m
+@@ -238,7 +238,6 @@ - (void)closeDevice;
+ - (GstVideoFormat)getGstVideoFormat:(NSNumber *)pixel_format;
+ #ifndef HAVE_IOS
+ - (CGDirectDisplayID)getDisplayIdFromDeviceIndex;
+-- (float)getScaleFactorFromDeviceIndex;
+ #endif
+ - (GstCaps *)getDeviceCaps;
+ - (BOOL)setDeviceCaps:(const GstVideoInfo *)info;
+@@ -619,20 +618,6 @@ - (CGDirectDisplayID)getDisplayIdFromDeviceIndex
+   displayId = [description objectForKey:@"NSScreenNumber"];
+   return [displayId unsignedIntegerValue];
+ }
+-
+-- (float)getScaleFactorFromDeviceIndex
+-{
+-  NSArray *screens = [NSScreen screens];
+-
+-  if (deviceIndex == DEFAULT_DEVICE_INDEX)
+-    return [[NSScreen mainScreen] backingScaleFactor];
+-  if (deviceIndex >= [screens count]) {
+-    GST_ELEMENT_ERROR (element, RESOURCE, NOT_FOUND,
+-                        ("Invalid screen capture device index"), (NULL));
+-    return 1.0;
+-  }
+-  return [[screens objectAtIndex:deviceIndex] backingScaleFactor];
+-}
+ #endif
+ 
+ 
+@@ -706,21 +691,17 @@ - (GstCaps *)getCaps
+ 
+   if (captureScreen) {
+ #ifndef HAVE_IOS
+-    CGRect rect;
+-    AVCaptureScreenInput *screenInput = (AVCaptureScreenInput *)input;
+-    if (CGRectIsEmpty (screenInput.cropRect)) {
+-      rect = CGDisplayBounds ([self getDisplayIdFromDeviceIndex]);
+-    } else {
+-      rect = screenInput.cropRect;
+-    }
++    const CGDisplayModeRef display_mode = CGDisplayCopyDisplayMode([self getDisplayIdFromDeviceIndex]);
++    const int width = CGDisplayModeGetPixelWidth(display_mode);
++    const int height = CGDisplayModeGetPixelHeight(display_mode);
++    CGDisplayModeRelease(display_mode);
+ 
+-    float scale = [self getScaleFactorFromDeviceIndex];
+     for (NSNumber *pixel_format in pixel_formats) {
+       GstVideoFormat gst_format = [self getGstVideoFormat:pixel_format];
+       if (gst_format != GST_VIDEO_FORMAT_UNKNOWN)
+         gst_caps_append (result, gst_caps_new_simple ("video/x-raw",
+-            "width", G_TYPE_INT, (int)(rect.size.width * scale),
+-            "height", G_TYPE_INT, (int)(rect.size.height * scale),
++            "width",  G_TYPE_INT, width,
++            "height", G_TYPE_INT, height,
+             "format", G_TYPE_STRING, gst_video_format_to_string (gst_format),
+             NULL));
+     }
