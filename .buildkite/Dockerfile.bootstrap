@@ -1,0 +1,19 @@
+FROM debian:buster
+
+WORKDIR /workspace
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+        python3 \
+        sudo \
+        && \
+    apt-get clean
+
+COPY . ./
+
+RUN ./cerbero-uninstalled -c config/cross-android-universal.cbc bootstrap -y
+
+RUN ./cerbero-uninstalled -c config/cross-android-universal.cbc package --only-build-deps gstreamer-1.0
