@@ -53,6 +53,4 @@ steps:
     agents:
       queue: v3
     command: ".buildkite/pipeline-deploy.sh | buildkite-agent pipeline upload"
-    env:
-      VIVI_FILENAME: ${VIVI_FILENAME}
 EOF
