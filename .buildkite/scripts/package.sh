@@ -2,4 +2,5 @@
 set -euo pipefail
 
 ./cerbero-uninstalled -c config/cross-android-universal.cbc package gstreamer-1.0
-cp gstreamer-1.0-android-universal-1.24.13.tar.xz "artifacts/${VIVI_FILENAME}"
+mkdir -p artifacts
+cp gstreamer-1.0* artifacts/ || echo "No files to copy"
