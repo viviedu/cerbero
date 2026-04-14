@@ -1,0 +1,114 @@
+From 860e0840098e7318f812e1d0449b1f8e54992acb Mon Sep 17 00:00:00 2001
+From: Nabeel Shami <nabeels@vivi.io>
+Date: Tue, 14 Apr 2026 14:09:41 +1000
+Subject: [PATCH] tinyalsasink: implement unlock/unlock_stop for blocked
+ pcm_write recovery
+
+When pcm_write blocks during teardown while the ALSA buffer is full,
+the sink cannot transition states. Implement GstBaseSink unlock/unlock_stop
+to call pcm_stop (issuing SNDRV_PCM_IOCTL_DROP) which wakes the blocked
+ioctl, and pcm_prepare in unlock_stop to restore the device. A flushing
+flag prevents re-entry into pcm_write and enables detection of blocked
+write recovery.
+---
+ sys/tinyalsa/tinyalsasink.c | 48 +++++++++++++++++++++++++++++++++++++
+ sys/tinyalsa/tinyalsasink.h |  2 ++
+ 2 files changed, 50 insertions(+)
+
+diff --git a/sys/tinyalsa/tinyalsasink.c b/sys/tinyalsa/tinyalsasink.c
+index 0d5f88ba7..486160b5c 100644
+--- a/sys/tinyalsa/tinyalsasink.c
++++ b/sys/tinyalsa/tinyalsasink.c
+@@ -398,9 +398,20 @@ gst_tinyalsa_sink_write (GstAudioSink * asink, gpointer data, guint length)
+   int ret;
+
+ again:
++  if (g_atomic_int_get (&sink->flushing))
++    return -1;
++
+   GST_DEBUG_OBJECT (sink, "Starting write");
+
+   ret = pcm_write (sink->pcm, data, length);
++
++  if (g_atomic_int_get (&sink->flushing)) {
++    if (ret < 0)
++      GST_WARNING_OBJECT (sink,
++          "Recovered from blocked pcm_write during unlock");
++    return -1;
++  }
++
+   if (ret == -EPIPE) {
+     GST_WARNING_OBJECT (sink, "Got an underrun");
+
+@@ -423,6 +434,40 @@ again:
+   return length;
+ }
+
++static gboolean
++gst_tinyalsa_sink_unlock (GstBaseSink * bsink)
++{
++  GstTinyalsaSink *sink = GST_TINYALSA_SINK (bsink);
++
++  GST_DEBUG_OBJECT (sink, "Unlock");
++
++  g_atomic_int_set (&sink->flushing, TRUE);
++
++  GST_OBJECT_LOCK (sink);
++  if (sink->pcm)
++    pcm_stop (sink->pcm);
++  GST_OBJECT_UNLOCK (sink);
++
++  return GST_BASE_SINK_CLASS (parent_class)->unlock (bsink);
++}
++
++static gboolean
++gst_tinyalsa_sink_unlock_stop (GstBaseSink * bsink)
++{
++  GstTinyalsaSink *sink = GST_TINYALSA_SINK (bsink);
++
++  GST_DEBUG_OBJECT (sink, "Unlock stop");
++
++  GST_OBJECT_LOCK (sink);
++  if (sink->pcm)
++    pcm_prepare (sink->pcm);
++  GST_OBJECT_UNLOCK (sink);
++
++  g_atomic_int_set (&sink->flushing, FALSE);
++
++  return GST_BASE_SINK_CLASS (parent_class)->unlock_stop (bsink);
++}
++
+ static void
+ gst_tinyalsa_sink_reset (GstAudioSink * asink)
+ {
+@@ -471,6 +516,8 @@ gst_tinyalsa_sink_class_init (GstTinyalsaSinkClass * klass)
+       GST_DEBUG_FUNCPTR (gst_tinyalsa_sink_set_property);
+
+   basesink_class->get_caps = GST_DEBUG_FUNCPTR (gst_tinyalsa_sink_getcaps);
++  basesink_class->unlock = GST_DEBUG_FUNCPTR (gst_tinyalsa_sink_unlock);
++  basesink_class->unlock_stop = GST_DEBUG_FUNCPTR (gst_tinyalsa_sink_unlock_stop);
+
+   audiosink_class->open = GST_DEBUG_FUNCPTR (gst_tinyalsa_sink_open);
+   audiosink_class->prepare = GST_DEBUG_FUNCPTR (gst_tinyalsa_sink_prepare);
+@@ -510,5 +557,6 @@ gst_tinyalsa_sink_init (GstTinyalsaSink * sink)
+   sink->device = DEFAULT_DEVICE;
+   sink->open = false;
+
++  sink->flushing = FALSE;
+   sink->cached_caps = NULL;
+ }
+diff --git a/sys/tinyalsa/tinyalsasink.h b/sys/tinyalsa/tinyalsasink.h
+index b07c86313..a6038482d 100644
+--- a/sys/tinyalsa/tinyalsasink.h
++++ b/sys/tinyalsa/tinyalsasink.h
+@@ -48,6 +48,8 @@ struct _GstTinyalsaSink {
+
+   struct pcm *pcm;
+
++  gboolean flushing;
++
+   GstCaps *cached_caps; /* for queries made while the device is open */
+ };
+
+--
+2.39.5 (Apple Git-154)
