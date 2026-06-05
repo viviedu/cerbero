@@ -1,0 +1,131 @@
+From 48143cf9e252a435bdf73c5a702b5dcec7b99341 Mon Sep 17 00:00:00 2001
+From: Mahoda Ratnayaka <mahodar@vivi.io>
+Date: Wed, 11 Jun 2025 09:45:53 +1000
+Subject: [PATCH] amcvideodec: add property to control frame dropping
+
+---
+sys/androidmedia/gstamcvideodec.c         | 60 ++++++++++++++++++-
+sys/androidmedia/gstamcvideodec.h         |  4 ++
+ 2 files changed, 62 insertions(+), 2 deletions(-)
+
+diff --git a/sys/androidmedia/gstamcvideodec.c b/sys/androidmedia/gstamcvideodec.c
+index e9230fb386..054dea8da3 100644
+--- a/sys/androidmedia/gstamcvideodec.c
++++ b/sys/androidmedia/gstamcvideodec.c
+@@ -247,9 +247,13 @@ static void
+ gst_amc_video_dec_on_frame_available (GstAmcSurfaceTexture * texture,
+     gpointer user_data);
+ 
++/* properties */
++#define DEFAULT_DROP_FRAMES       TRUE
++
+ enum
+ {
+-  PROP_0
++  PROP_0,
++  PROP_DROP_FRAMES,
+ };
+ 
+ /* class initialization */
+@@ -332,6 +336,38 @@ caps_to_mime (GstCaps * caps)
+   return NULL;
+ }
+ 
++static void
++gst_amc_video_dec_get_property (GObject * object, guint property_id,
++    GValue * value, GParamSpec * pspec)
++{
++  GstAmcVideoDec *decoder = GST_AMC_VIDEO_DEC (object);
++
++  switch (property_id) {
++    case PROP_DROP_FRAMES:
++      g_value_set_boolean (value, decoder->drop_frames);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
++      break;
++  }
++}
++
++static void
++gst_amc_video_dec_set_property (GObject * object, guint property_id,
++    const GValue * value, GParamSpec * pspec)
++{
++  GstAmcVideoDec *decoder = GST_AMC_VIDEO_DEC (object);
++
++  switch (property_id) {
++    case PROP_DROP_FRAMES:
++      decoder->drop_frames = g_value_get_boolean (value);
++      break;
++    default:
++      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
++      break;
++  }
++}
++
+ static void
+ gst_amc_video_dec_base_init (gpointer g_class)
+ {
+@@ -390,8 +426,25 @@ gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass)
+ 
+   parent_class = g_type_class_peek_parent (klass);
+ 
++  gobject_class->set_property = gst_amc_video_dec_set_property;
++  gobject_class->get_property = gst_amc_video_dec_get_property;
+   gobject_class->finalize = gst_amc_video_dec_finalize;
+ 
++  /**
++   * AmcVideoDec:drop-frames:
++   *
++   * If set to %TRUE the decoder will drop late frames (DEFAULT behaviour).
++   * For Live streams (e.g HLS) it is beneficial to set this false,
++   * otherwise clock-drift appears to trigger the decode to drop frames it considers late.
++   *
++   * Since: 1.16.2 VIVI-ONLY
++   */
++
++  g_object_class_install_property (gobject_class, PROP_DROP_FRAMES,
++      g_param_spec_boolean ("drop-frames", "Drop Old Frames",
++          "Drop Frames which have negative deadline for display",
++          DEFAULT_DROP_FRAMES, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
++
+   element_class->change_state =
+       GST_DEBUG_FUNCPTR (gst_amc_video_dec_change_state);
+   element_class->set_context =
+@@ -424,6 +477,9 @@ gst_amc_video_dec_init (GstAmcVideoDec * self)
+   g_cond_init (&self->gl_cond);
+ 
+   self->gl_queue = g_queue_new ();
++
++  /* Properties */
++  self->drop_frames = DEFAULT_DROP_FRAMES;
+ }
+ 
+ static gboolean
+@@ -1385,7 +1441,7 @@ retry:
+ 
+   is_eos = !!(buffer_info.flags & BUFFER_FLAG_END_OF_STREAM);
+ 
+-  if (frame
++  if (frame && self->drop_frames
+       && (deadline =
+           gst_video_decoder_get_max_decode_time (GST_VIDEO_DECODER (self),
+               frame)) < 0) {
+diff --git a/sys/androidmedia/gstamcvideodec.h b/sys/androidmedia/gstamcvideodec.h
+index af3e000992..a096b9776c 100644
+--- a/sys/androidmedia/gstamcvideodec.h
++++ b/sys/androidmedia/gstamcvideodec.h
+@@ -74,6 +74,10 @@ struct _GstAmcVideoDec
+   guint width;
+   guint height;
+ 
++  /* Property for dropping frames if they are late
++   */
++  gboolean drop_frames;
++
+   guint8 *codec_data;
+   gsize codec_data_size;
+   /* TRUE if the component is configured and saw
+-- 
+2.49.0
+

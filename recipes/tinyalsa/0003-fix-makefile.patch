@@ -1,0 +1,36 @@
+From 5643e1b734b49385a5db3626b0d51c5f7180bfea Mon Sep 17 00:00:00 2001
+From: Cerbero Build System <cerbero@gstreamer.freedesktop.org>
+Date: Sun, 20 Mar 2022 22:07:19 +0000
+Subject: [PATCH] fix makefile
+
+---
+ src/Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Makefile b/src/Makefile
+index d33c9f1..bd63e3d 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -7,9 +7,9 @@ LIBDIR := $(LIBDIR)/$(DEB_HOST_MULTIARCH)
+ endif
+ 
+ CROSS_COMPILE =
+-CC = $(CROSS_COMPILE)gcc
++CC := $(CROSS_COMPILE)$(CC)
+ AR = $(CROSS_COMPILE)ar
+-LD = $(CROSS_COMPILE)gcc
++LD := $(CROSS_COMPILE)$(LD)
+ 
+ WARNINGS = -Wall -Wextra -Werror -Wfatal-errors
+ INCLUDE_DIRS = -I ../include
+@@ -37,7 +37,7 @@ libtinyalsa.so.1: libtinyalsa.so.1.1.1
+ 	ln -sf $< $@
+ 
+ libtinyalsa.so.1.1.1: $(OBJECTS)
+-	$(LD) $(LDFLAGS) -shared -Wl,-soname,libtinyalsa.so.1 $^ -o $@
++	$(CC) $(LDFLAGS) -shared -Wl,-soname,libtinyalsa.so.1 $^ -o $@
+ 
+ .PHONY: clean
+ clean:
+-- 
+2.30.2

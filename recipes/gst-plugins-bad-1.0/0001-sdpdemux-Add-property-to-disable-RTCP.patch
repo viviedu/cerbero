@@ -1,0 +1,36 @@
+From aed11e23b691130c80935d8ac49e80d5425dc40c Mon Sep 17 00:00:00 2001
+From: Mahoda Ratnayaka <mahodar@vivi.io>
+Date: Tue, 10 Jun 2025 13:54:00 +1000
+Subject: [PATCH] sdpdemux: Add property to disable RTCP
+
+---
+ gst/sdp/gstsdpdemux.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/gst/sdp/gstsdpdemux.c b/gst/sdp/gstsdpdemux.c
+index 3c09ecf593..6336b01099 100644
+--- a/gst/sdp/gstsdpdemux.c
++++ b/gst/sdp/gstsdpdemux.c
+@@ -1089,7 +1089,7 @@ gst_sdp_demux_stream_configure_udp (GstSDPDemux * demux, GstSDPStream * stream)
+     destination = stream->destination;
+ 
+   /* creating UDP source */
+-  if (stream->rtp_port != -1) {
++  if (demux->rtcp_mode && stream->rtp_port != -1) {
+     GST_DEBUG_OBJECT (demux, "receiving RTP from %s:%d", destination,
+         stream->rtp_port);
+ 
+@@ -1191,6 +1191,10 @@ gst_sdp_demux_stream_configure_udp_sink (GstSDPDemux * demux,
+   GSocket *socket;
+   gchar *destination, *uri, *name;
+ 
++  if (!demux->rtcp_mode) {
++    return TRUE;
++  }
++
+   if (demux->rtcp_mode == GST_SDP_DEMUX_RTCP_MODE_INACTIVE
+       || demux->rtcp_mode == GST_SDP_DEMUX_RTCP_MODE_RECVONLY) {
+     GST_INFO_OBJECT (demux, "RTCP feedback disabled, not sending RRs");
+-- 
+2.49.0
+
