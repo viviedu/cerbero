@@ -4,49 +4,45 @@ Date: Tue, 10 Jun 2025 10:43:15 +1000
 Subject: [PATCH 4/4] Proxy stuff originally from Andrew Pritchard
 
 ---
- ext/soup/gstsouphttpsrc.c                 | 22 +++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ ext/soup/gstsouphttpsrc.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
 
 diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
 index fa22aad1af..de6434be0c 100644
 --- a/ext/soup/gstsouphttpsrc.c
 +++ b/ext/soup/gstsouphttpsrc.c
-@@ -72,6 +72,8 @@
- #include "config.h"
- #endif
- 
-+#include <libsoup/soup.h>
-+
- #include <string.h>
- #ifdef HAVE_STDLIB_H
- #include <stdlib.h>             /* atoi() */
-@@ -2624,6 +2626,26 @@ gst_soup_http_src_set_proxy (GstSoupHTTPSrc * src, const gchar * uri)
+@@ -2618,6 +2618,30 @@ gst_soup_http_src_set_proxy (GstSoupHTTPSrc * src, const gchar * uri)
      g_free (new_uri);
    }
- 
-+  if (!src->proxy || !src->proxy->soup_uri) {
-+    return FALSE;
-+  }
-+
-+  if (soup_uri_get_user (src->proxy->soup_uri) != NULL) {
-+    if (src->proxy_id) {
+
++  if (src->proxy) {
++#if (defined(LINK_SOUP) && LINK_SOUP == 3) || (!defined(LINK_SOUP) && GLIB_CHECK_VERSION(2, 66, 0))
++    {
++      const gchar *user = g_uri_get_user (src->proxy->uri);
++      if (user != NULL) {
++        g_free (src->proxy_id);
++        src->proxy_id = g_strdup (user);
++      }
++      const gchar *password = g_uri_get_password (src->proxy->uri);
++      if (password != NULL) {
++        g_free (src->proxy_pw);
++        src->proxy_pw = g_strdup (password);
++      }
++    }
++#else
++    if (soup_uri_get_user (src->proxy->soup_uri) != NULL) {
 +      g_free (src->proxy_id);
-+      src->proxy_id = NULL;
++      src->proxy_id = g_strdup (soup_uri_get_user (src->proxy->soup_uri));
 +    }
-+    src->proxy_id = g_strdup (soup_uri_get_user (src->proxy->soup_uri));
-+  }
-+
-+  if (soup_uri_get_password (src->proxy->soup_uri) != NULL) {
-+    if (src->proxy_pw) {
++    if (soup_uri_get_password (src->proxy->soup_uri) != NULL) {
 +      g_free (src->proxy_pw);
-+      src->proxy_pw = NULL;
++      src->proxy_pw = g_strdup (soup_uri_get_password (src->proxy->soup_uri));
 +    }
-+    src->proxy_pw = g_strdup (soup_uri_get_password (src->proxy->soup_uri));
++#endif
 +  }
 +
    return (src->proxy != NULL);
  }
- 
--- 
-2.49.0
 
+--
+2.49.0
