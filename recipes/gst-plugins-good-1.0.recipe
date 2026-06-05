@@ -39,7 +39,7 @@ class Recipe(custom.GStreamer):
             'orc', 'wavpack', 'flac', 'taglib', 'bzip2', 'zlib',
             'libvpx', 'libdv', 'cairo', 'opencore-amr']
     use_system_libs = True
-
+    patches = []
 
     files_lang = ['gst-plugins-good-1.0']
 
