@@ -4,17 +4,17 @@ Date: Tue, 10 Jun 2025 10:43:15 +1000
 Subject: [PATCH 4/4] Proxy stuff originally from Andrew Pritchard
 
 ---
- ext/soup/gstsouphttpsrc.c | 24 ++++++++++++++++++++++++
- 1 file changed, 24 insertions(+)
+ ext/soup/gstsouphttpsrc.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
 
 diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
 index fa22aad1af..de6434be0c 100644
 --- a/ext/soup/gstsouphttpsrc.c
 +++ b/ext/soup/gstsouphttpsrc.c
-@@ -2618,6 +2618,30 @@ gst_soup_http_src_set_proxy (GstSoupHTTPSrc * src, const gchar * uri)
+@@ -2618,6 +2618,31 @@ gst_soup_http_src_set_proxy (GstSoupHTTPSrc * src, const gchar * uri)
+     src->proxy = gst_soup_uri_new (new_uri);
      g_free (new_uri);
    }
-
 +  if (src->proxy) {
 +#if (defined(LINK_SOUP) && LINK_SOUP == 3) || (!defined(LINK_SOUP) && GLIB_CHECK_VERSION(2, 66, 0))
 +    {
@@ -40,9 +40,10 @@ index fa22aad1af..de6434be0c 100644
 +    }
 +#endif
 +  }
-+
+ 
    return (src->proxy != NULL);
  }
 
---
+-- 
 2.49.0
+
