@@ -50,6 +50,7 @@ class Recipe(custom.GStreamer):
                      'webrtc': 'enabled',
                      'webrtcdsp': 'enabled',
                      'zbar': 'enabled',
+                     'tinyalsa': 'enabled',
                      # disabled plugins
                      'amfcodec': 'disabled',
                      'curl': 'disabled',
@@ -88,8 +89,14 @@ class Recipe(custom.GStreamer):
             'libsrtp', 'libdca', 'libdvdnav', 'libnice',
             'soundtouch', 'vo-aacenc', 'librsvg', 'openjpeg',
             'pango', 'spandsp', 'webrtc-audio-processing', 'sbc', 'ladspa',
-            'srt', 'zbar', 'libltc', 'qrencode', 'json-glib']
+            'srt', 'zbar', 'libltc', 'qrencode', 'json-glib', 'tinyalsa']
     use_system_libs = True
+
+    patches = [
+        'gst-plugins-bad-1.0/0001-sdpdemux-Add-property-to-disable-RTCP.patch',
+        'gst-plugins-bad-1.0/0001-amcvideodec-add-property-to-control-frame-dropping.patch',
+        'gst-plugins-bad-1.0/0001-Shot-in-the-dark-fix-for-tinyalsa-blocking.patch',
+    ]
 
     files_lang = ['gst-plugins-bad-1.0']
 
@@ -464,6 +471,7 @@ class Recipe(custom.GStreamer):
             ],
         Platform.ANDROID: [
              '%(libdir)s/gstreamer-1.0/libgstopensles%(mext)s',
+             '%(libdir)s/gstreamer-1.0/libgsttinyalsa%(mext)s',
             ]
     }
 
@@ -489,6 +497,7 @@ class Recipe(custom.GStreamer):
             ],
         Platform.ANDROID: [
              '%(libdir)s/gstreamer-1.0/libgstopensles.a', '%(libdir)s/gstreamer-1.0/libgstopensles.la',
+             '%(libdir)s/gstreamer-1.0/libgsttinyalsa.a',
             ]
     }
 

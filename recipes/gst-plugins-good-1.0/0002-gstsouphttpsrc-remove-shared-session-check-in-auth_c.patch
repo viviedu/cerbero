@@ -1,0 +1,33 @@
+From cf827c0a1d16e6f59458baf03d25c953a7b32360 Mon Sep 17 00:00:00 2001
+From: Mahoda Ratnayaka <mahodar@vivi.io>
+Date: Tue, 10 Jun 2025 10:40:37 +1000
+Subject: [PATCH 2/4] gstsouphttpsrc: remove shared session check in auth_cb
+
+---
+ext/soup/gstsouphttpsrc.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/ext/soup/gstsouphttpsrc.c b/ext/soup/gstsouphttpsrc.c
+index 32d2e2039b..13dd41b6ab 100644
+--- a/ext/soup/gstsouphttpsrc.c
++++ b/ext/soup/gstsouphttpsrc.c
+@@ -1320,9 +1320,14 @@ gst_soup_http_src_authenticate_cb (SoupMessage * msg, SoupAuth * auth,
+   GstSoupHTTPSrc *src = GST_SOUP_HTTP_SRC (data);
+   SoupStatus status_code;
+ 
+-  /* Might be from another user of the shared session */
+-  if (!GST_IS_SOUP_HTTP_SRC (src) || msg != src->msg)
++  /* removing (msg != src->msg) check as this breaks authentication
++   * original comment stated: "Might be from another user of the shared session"
++   * however, we cannot have a shared session if proxy != NULL (see line:DUNNO_LOL)
++   * and src->msg is not actually used in the logic below (plus src->msg->status_code == 0)
++   */
++  if (!GST_IS_SOUP_HTTP_SRC (src)) {
+     return FALSE;
++  }
+ 
+   status_code = _soup_message_get_status (msg);
+ 
+-- 
+2.49.0
+

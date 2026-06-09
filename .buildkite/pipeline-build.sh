@@ -3,6 +3,8 @@ set -euo pipefail
 
 bootstrap=$(buildkite-agent meta-data get "bootstrap" --default "false")
 
+VIVI_FILENAME="gstreamer-1.0-android-universal-1.24.13-vivi-${BUILDKITE_BUILD_NUMBER}.tar.xz"
+
 cat <<EOF
 env:
   BUILDKITE_ARTIFACT_UPLOAD_DESTINATION: s3://vivi-buildkite-artifacts/${BUILDKITE_BUILD_ID}
@@ -39,11 +41,13 @@ steps:
           image-name: ${BUILDKITE_PIPELINE_SLUG}-package
           cache-from: package:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-package
           run: package
+          env:
+            - VIVI_FILENAME=${VIVI_FILENAME}
           volumes:
             - ./artifacts:/workspace/artifacts
       - artifacts#v1.2.0:
           upload:
-            - artifacts/*
+            - artifacts/${VIVI_FILENAME}
 
   - input: ":rocket: Deploy"
     key: deploy_input
@@ -53,4 +57,6 @@ steps:
     agents:
       queue: v3
     command: ".buildkite/pipeline-deploy.sh | buildkite-agent pipeline upload"
+    env:
+      VIVI_FILENAME: ${VIVI_FILENAME}
 EOF
