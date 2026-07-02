@@ -9,9 +9,10 @@ class Recipe(custom.GStreamer):
                      # enabled plugins
                      'a52dec': 'enabled',
                      'dvdread': 'enabled',
-                     'x264': 'enabled'}
+                     # Vivi: x264 is GPL; disabled to keep the shipped SDK GPL-free
+                     'x264': 'disabled'}
     deps = ['gstreamer-1.0', 'gst-plugins-base-1.0', 'a52dec',
-            'libdvdread', 'x264']
+            'libdvdread']
 
     files_plugins_codecs_restricted = [
              '%(libdir)s/gstreamer-1.0/libgstasf%(mext)s',
@@ -59,8 +60,7 @@ class Recipe(custom.GStreamer):
         if self.config.platform == Platform.WINDOWS:
             self.disable_plugin('dvdread', 'dvd_gpl', dep='libdvdread')
 
-        if not self.using_uwp():
-            self.enable_plugin('x264', 'codecs_gpl_restricted', dep='x264')
+        # Vivi: x264 (GPL) intentionally disabled; do not enable it.
 
         if self.config.variants.nodebug:
             self.append_env('CFLAGS', '-DGST_LEVEL_MAX=GST_LEVEL_FIXME')

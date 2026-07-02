@@ -15,10 +15,9 @@ class Recipe(recipe.Recipe):
     version = '0.14.5'
     stype = SourceType.GIT
     remotes = {'origin': 'https://gitlab.freedesktop.org/gstreamer/%(name)s.git'}
-    if GStreamer.tagged_for_release:
-        commit = f'gstreamer-{GStreamer.version}'
-    else:
-        commit = 'origin/0.14'
+    # Vivi: pin to the release tag matching the pinned GStreamer core for
+    # reproducible builds (upstream default tracks the origin/0.14 branch).
+    commit = f'gstreamer-{GStreamer.version}'
     # Each plugin uses one or more of these licenses.
     licenses = [{
         License.Apachev2: ['LICENSE-APACHE'],

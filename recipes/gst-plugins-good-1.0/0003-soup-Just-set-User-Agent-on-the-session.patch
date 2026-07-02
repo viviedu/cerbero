@@ -1,0 +1,52 @@
+From 48c81e004ac69324e922d3f8fbe71c74b88cd3d5 Mon Sep 17 00:00:00 2001
+From: Mahoda Ratnayaka <mahodar@vivi.io>
+Date: Tue, 10 Jun 2025 10:41:48 +1000
+Subject: [PATCH 3/4] soup: Just set User-Agent on the session
+
+---
+ ext/soup/gstsouphttpsrc.c                 | 22 +++++++++----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c b/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c
+index 13dd41b6ab..fa22aad1af 100644
+--- a/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c
++++ b/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c
+@@ -1032,7 +1032,7 @@ thread_func (gpointer user_data)
+    * to be able to have the same session with different User-Agents per
+    * source */
+   session->session =
+-      _soup_session_new_with_options ("user-agent", NULL,
++      _soup_session_new_with_options ("user-agent", src->user_agent,
+       "timeout", src->timeout, "tls-interaction", src->tls_interaction,
+       /* Unset the limit the number of maximum allowed connections */
+       "max-conns", src->session_is_shared ? G_MAXINT : 10,
+@@ -1775,16 +1775,16 @@ gst_soup_http_src_build_message (GstSoupHTTPSrc * src, const gchar * method)
+   /* Duplicating the defaults of libsoup here. We don't want to set a
+    * User-Agent in the session as each source might have its own User-Agent
+    * set */
+-  GString *user_agent = g_string_new (src->user_agent);
+-  g_string_replace (user_agent, "{VERSION}", PACKAGE_VERSION, 0);
+-  if (user_agent->len == 0 || g_str_has_suffix (user_agent->str, " ")) {
+-    g_string_append_printf (user_agent, "libsoup/%u.%u.%u",
+-        _soup_get_major_version (), _soup_get_minor_version (),
+-        _soup_get_micro_version ());
+-  }
+-  _soup_message_headers_append (request_headers, "User-Agent", user_agent->str);
+-  g_string_free (user_agent, TRUE);
+-  user_agent = NULL;
++  // GString *user_agent = g_string_new (src->user_agent);
++  // g_string_replace (user_agent, "{VERSION}", PACKAGE_VERSION, 0);
++  // if (user_agent->len == 0 || g_str_has_suffix (user_agent->str, " ")) {
++  //   g_string_append_printf (user_agent, "libsoup/%u.%u.%u",
++  //       _soup_get_major_version (), _soup_get_minor_version (),
++  //       _soup_get_micro_version ());
++  // }
++  // _soup_message_headers_append (request_headers, "User-Agent", user_agent->str);
++  // g_string_free (user_agent, TRUE);
++  // user_agent = NULL;
+ 
+   if (!src->keep_alive) {
+     _soup_message_headers_append (request_headers, "Connection", "close");
+-- 
+2.49.0
+

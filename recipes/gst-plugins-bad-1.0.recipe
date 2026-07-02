@@ -91,6 +91,9 @@ class Recipe(custom.GStreamer):
             'srt', 'zbar', 'libltc', 'qrencode', 'json-glib']
     use_system_libs = True
 
+    patches = ['gst-plugins-bad-1.0/0001-amcvideodec-add-property-to-control-frame-dropping.patch',
+               'gst-plugins-bad-1.0/0001-Shot-in-the-dark-fix-for-tinyalsa-blocking.patch']
+
     files_lang = ['gst-plugins-bad-1.0']
 
     files_libs = [

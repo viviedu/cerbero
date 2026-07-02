@@ -1,0 +1,19 @@
+steps:
+  - input: ":construction: Build"
+    key: build_input
+    fields:
+      - select: Bootstrap
+        key: bootstrap
+        hint: "Whether to build the bootstrap image, DO NOT SAY YES unless you really need to"
+        default: "false"
+        options:
+          - label: "Yes"
+            value: "true"
+          - label: "No"
+            value: "false"
+
+  - label: ":pipeline: Build"
+    depends_on: build_input
+    agents:
+      queue: v3
+    command: ".buildkite/pipeline-build.sh | buildkite-agent pipeline upload"

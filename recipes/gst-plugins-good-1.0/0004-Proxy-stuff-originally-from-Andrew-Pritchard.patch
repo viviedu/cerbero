@@ -1,0 +1,49 @@
+From cdc4dc382a326dddd93dbfa4a82507708817cb66 Mon Sep 17 00:00:00 2001
+From: Mahoda Ratnayaka <mahodar@vivi.io>
+Date: Tue, 10 Jun 2025 10:43:15 +1000
+Subject: [PATCH 4/4] Proxy stuff originally from Andrew Pritchard
+
+---
+ ext/soup/gstsouphttpsrc.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c b/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c
+index fa22aad1af..de6434be0c 100644
+--- a/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c
++++ b/subprojects/gst-plugins-good/ext/soup/gstsouphttpsrc.c
+@@ -2618,6 +2618,31 @@ gst_soup_http_src_set_proxy (GstSoupHTTPSrc * src, const gchar * uri)
+     src->proxy = gst_soup_uri_new (new_uri);
+     g_free (new_uri);
+   }
++  if (src->proxy) {
++#if (defined(LINK_SOUP) && LINK_SOUP == 3) || (!defined(LINK_SOUP) && GLIB_CHECK_VERSION(2, 66, 0))
++    {
++      const gchar *user = g_uri_get_user (src->proxy->uri);
++      if (user != NULL) {
++        g_free (src->proxy_id);
++        src->proxy_id = g_strdup (user);
++      }
++      const gchar *password = g_uri_get_password (src->proxy->uri);
++      if (password != NULL) {
++        g_free (src->proxy_pw);
++        src->proxy_pw = g_strdup (password);
++      }
++    }
++#else
++    if (soup_uri_get_user (src->proxy->soup_uri) != NULL) {
++      g_free (src->proxy_id);
++      src->proxy_id = g_strdup (soup_uri_get_user (src->proxy->soup_uri));
++    }
++    if (soup_uri_get_password (src->proxy->soup_uri) != NULL) {
++      g_free (src->proxy_pw);
++      src->proxy_pw = g_strdup (soup_uri_get_password (src->proxy->soup_uri));
++    }
++#endif
++  }
+ 
+   return (src->proxy != NULL);
+ }
+
+-- 
+2.49.0
+

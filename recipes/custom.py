@@ -21,7 +21,7 @@ def running_on_cerbero_ci():
 
 class GStreamer(recipe.Recipe):
     licenses = [License.LGPLv2Plus]
-    version = '1.26.11.1'
+    version = '1.26.11'
     tagged_for_release = False
 
     # Decide what stype to use
@@ -39,12 +39,8 @@ class GStreamer(recipe.Recipe):
     if use_git:
         stype = SourceType.GIT
         remotes = {'origin': 'https://gitlab.freedesktop.org/gstreamer/gstreamer.git'}
-        if int(version.split('.')[1]) % 2 == 0:
-            # Even version, use the specific branch
-            commit = 'origin/' + '.'.join(version.split('.')[0:2])
-        else:
-            # Odd version, use git main
-            commit = 'origin/main'
+        # Vivi: pin to the exact release tag for reproducible Android builds
+        commit = '1.26.11'
     else:
         stype = SourceType.TARBALL
         url = 'https://gstreamer.freedesktop.org/src/%(name)s/%(name)s-%(version)s.tar.xz'
