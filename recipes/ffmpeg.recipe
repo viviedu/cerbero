@@ -70,6 +70,19 @@ class Recipe(recipe.Recipe):
                 # ld.lld: error: relocation R_386_32 cannot be used against local symbol; recompile with -fPIC
                 # See https://github.com/FFmpeg/FFmpeg/blob/n6.0/libavutil/x86/x86inc.asm#L104-L108
                 self.meson_options['asm'] = 'disabled'
+        elif (self.config.target_arch == Architecture.ARMv7
+              and self.config.target_platform == Platform.ANDROID):
+            # The armeabi-v7a ABI baseline is VFPv3-D16, so config/android.config
+            # sets global CFLAGS '-mfpu=vfpv3-d16' (NEON off) for device compat.
+            # ffmpeg's native ./configure used to force-enable NEON for armv7-a
+            # regardless, but this Meson port gates NEON on a compile-check that
+            # honours CFLAGS -> the check fails and every *_neon.S (e.g.
+            # vp8dsp_neon.S) is dropped, making VP8/H264 software decode ~3x
+            # slower on 32-bit (arm64 is unaffected: NEON is mandatory in ARMv8).
+            # Re-enable NEON for ffmpeg only (the later -mfpu wins). Safe: ffmpeg
+            # runtime-detects NEON and falls back to C, and all target devices are
+            # NEON-capable Cortex-A.
+            self.append_env('CFLAGS', '-mfpu=neon')
 
         # Populate self.files_devel
         files_devel_tpl = ['%(libdir)s/{}.la', '%(libdir)s/pkgconfig/{}.pc', 'include/{}']
