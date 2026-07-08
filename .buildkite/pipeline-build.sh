@@ -28,7 +28,7 @@ steps:
     key: package
     depends_on: bootstrap
     agents:
-      queue: v6-66-intel-big
+      queue: thicc
     command: .buildkite/scripts/package.sh
     plugins:
       - viviedu/docker-compose#dd0a3f4:
