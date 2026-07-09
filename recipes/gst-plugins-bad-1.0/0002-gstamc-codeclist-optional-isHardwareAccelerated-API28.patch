@@ -1,0 +1,61 @@
+From 1111111111111111111111111111111111111111 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 9 Jul 2026 16:45:00 +1000
+Subject: [PATCH] gstamc: make MediaCodecInfo.isHardwareAccelerated() optional
+ on Android < 10 (API < 29)
+
+isHardwareAccelerated() was added in API level 29 (Android 10). On Android
+8/9 (API 26-28) the method does not exist, so gst_amc_jni_get_method_id()
+throws NoSuchMethodError and gst_amc_codeclist_jni_static_init() returned
+FALSE -- aborting MediaCodec codec-list initialisation entirely and leaving
+gstamc with ZERO registered codecs (no hardware video decoders; all decode
+falls back to software avdec_*).
+
+Treat the lookup as optional: clear the exception, continue with a NULL
+method id, and assume hardware-accelerated = TRUE at the call site. This
+restores hardware codec registration on Android 8/9.
+
+NOTE: throwaway / proof-of-concept -- it blanket-assumes hardware
+accelerated when the API is unavailable rather than deriving it.
+---
+ subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c | 19 +-
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c b/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c
+index 1111111111..2222222222 100644
+--- a/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c
++++ b/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c
+@@ -163,10 +163,16 @@
+       gst_amc_jni_get_method_id (env, &err, media_codecinfo.klass,
+       "isHardwareAccelerated", "()Z");
+   if (!media_codecinfo.is_hardware_accelerated) {
+-    GST_ERROR ("Failed to get android.media.MediaCodecInfo "
+-        "isHardwareAccelerated(): %s", err->message);
++    /* isHardwareAccelerated() was added in API level 29 (Android 10). On
++     * Android 8/9 the method is absent and the lookup throws
++     * NoSuchMethodError, which aborted codec-list init and left gstamc with
++     * zero registered codecs (no hardware decoders). Treat it as optional;
++     * gst_amc_codec_info_handle_is_hardware_accelerated() assumes TRUE when
++     * the method id is NULL. */
++    GST_WARNING ("android.media.MediaCodecInfo.isHardwareAccelerated() "
++        "unavailable (API < 29), assuming hardware accelerated: %s",
++        err ? err->message : "no such method");
+     g_clear_error (&err);
+-    return FALSE;
+   }
+ 
+   media_codeccapabilities.klass =
+@@ -331,6 +337,13 @@
+ 
+   env = gst_amc_jni_get_env ();
+ 
++  /* Method unavailable on API < 29 (see gst_amc_codeclist_jni_static_init):
++   * assume hardware accelerated so codec enumeration/ranking still works. */
++  if (!media_codecinfo.is_hardware_accelerated) {
++    *is_hardware_accelerated = TRUE;
++    return TRUE;
++  }
++
+   if (!gst_amc_jni_call_boolean_method (env, err, handle->object,
+           media_codecinfo.is_hardware_accelerated, is_hardware_accelerated))
+     return FALSE;
