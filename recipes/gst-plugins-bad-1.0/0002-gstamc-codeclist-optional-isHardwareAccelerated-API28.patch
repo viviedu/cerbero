@@ -1,8 +1,10 @@
 From 1111111111111111111111111111111111111111 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
+From: Phillip Abbott <phillipa@vivi.io>
 Date: Wed, 9 Jul 2026 16:45:00 +1000
 Subject: [PATCH] gstamc: make MediaCodecInfo.isHardwareAccelerated() optional
  on Android < 10 (API < 29)
+
+Interim fix, pending upstream report.
 
 isHardwareAccelerated() was added in API level 29 (Android 10). On Android
 8/9 (API 26-28) the method does not exist, so gst_amc_jni_get_method_id()
@@ -13,10 +15,11 @@ falls back to software avdec_*).
 
 Treat the lookup as optional: clear the exception, continue with a NULL
 method id, and assume hardware-accelerated = TRUE at the call site. This
-restores hardware codec registration on Android 8/9.
-
-NOTE: throwaway / proof-of-concept -- it blanket-assumes hardware
-accelerated when the API is unavailable rather than deriving it.
+restores hardware codec registration on Android 8/9, and is required for
+hardware decode on the Android 9 target panels. Known limitation: when
+the API is unavailable every codec is reported as hardware-accelerated
+rather than derived -- acceptable, as the alternative is no codecs at
+all. See "Moonraker GStreamer Upgrade" decision record, D3.
 ---
  subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c | 19 +-
  1 file changed, 16 insertions(+), 3 deletions(-)
