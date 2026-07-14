@@ -108,10 +108,6 @@ class Recipe(recipe.Recipe):
 
     def prepare(self):
         self.openssl_platform = self._get_openssl_platform()
-        # aes_v8 asm crashes when assembled Thumb-2; build openssl ARM (WebRTC DTLS)
-        if self.config.target_platform == Platform.ANDROID and \
-                self.config.target_arch in (Architecture.ARM, Architecture.ARMv7):
-            self.set_env('CFLAGS', self.get_env('CFLAGS').replace('-mthumb', '-marm'))
         # Need this include first, otherwise on compilation openssl will prefer
         # the headers in the prefix over those in its sources dir
         srcdir_include = f'-I{self.config_src_dir}/include '
