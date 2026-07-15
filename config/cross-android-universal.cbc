@@ -11,8 +11,6 @@ universal_archs = {
             # Path is relative to this file
             Architecture.ARMv7:  "cross-android-armv7.cbc",
             Architecture.ARM64:  "cross-android-arm64.cbc",
-            Architecture.X86:    "cross-android-x86.cbc",
-            Architecture.X86_64: "cross-android-x86-64.cbc",
         }
 
 #variants.override('nodebug')
