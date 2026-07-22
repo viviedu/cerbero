@@ -94,7 +94,8 @@ class Recipe(custom.GStreamer):
     patches = ['gst-plugins-bad-1.0/0001-amcvideodec-add-property-to-control-frame-dropping.patch',
                'gst-plugins-bad-1.0/0001-Shot-in-the-dark-fix-for-tinyalsa-blocking.patch',
                'gst-plugins-bad-1.0/0002-gstamc-codeclist-optional-isHardwareAccelerated-API28.patch',
-               'gst-plugins-bad-1.0/0003-androidmedia-force-JNI-codec-backend-disable-NDK.patch']
+               'gst-plugins-bad-1.0/0003-androidmedia-force-JNI-codec-backend-disable-NDK.patch',
+               'gst-plugins-bad-1.0/0004-Avoid-issues-with-buffer-cleanup-while-flushing.patch']
 
     files_lang = ['gst-plugins-bad-1.0']
 
