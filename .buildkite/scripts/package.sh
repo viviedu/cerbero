@@ -1,6 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
+# Force-rebuild Vivi-patched recipes: the bootstrap image's cookbook marks them
+# built, and COPYed recipe/patch changes evade its mtime-gated change detection.
+VIVI_PATCHED_RECIPES=(
+  gst-plugins-base-1.0
+  gst-plugins-good-1.0
+  gst-plugins-bad-1.0
+)
+./cerbero-uninstalled -c config/cross-android-universal.cbc buildone "${VIVI_PATCHED_RECIPES[@]}"
+
 ./cerbero-uninstalled -c config/cross-android-universal.cbc package gstreamer-1.0
 mkdir -p artifacts
 # cerbero appends its own package revision to the version (e.g. 1.26.11.1), so
