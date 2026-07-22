@@ -1,0 +1,50 @@
+From c6d16b01a17e4d78ac8b7ca9be38940abdf41943 Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jake@vivi.io>
+Date: Wed, 22 Jul 2026 20:29:42 +1000
+Subject: [PATCH] Avoid issues with buffer cleanup while flushing
+
+Skip GL sync waits and don't stash GL errors while the decoder is
+flushing, to avoid hangs/errors from buffer cleanup racing teardown.
+
+Ported unchanged from the vivi-1.20.1-android branch onto GStreamer
+1.26.11 (context-only rebase; carried until fixed upstream).
+---
+ .../gst-plugins-bad/sys/androidmedia/gstamcvideodec.c     | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c b/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c
+index c7f5cb174c..fe006cdc2d 100644
+--- a/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c
++++ b/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c
+@@ -943,7 +943,7 @@ _gl_sync_release_buffer (struct gl_sync *sync, gboolean render)
+ 
+ out:
+   if (error) {
+-    if (sync->sink->gl_error == NULL)
++    if (!sync->sink->flushing && sync->sink->gl_error == NULL)
+       sync->sink->gl_error = error;
+     else
+       g_clear_error (&error);
+@@ -1208,6 +1208,9 @@ _amc_gl_wait_gl (GstGLContext * context, struct gl_wait *wait)
+ {
+   struct gl_sync *sync = wait->sync_meta->data;
+ 
++  if (sync->sink->flushing)
++    return;
++
+   g_mutex_lock (&sync->sink->gl_lock);
+   wait->ret = _amc_gl_iterate_queue_unlocked (wait->sync_meta, TRUE);
+   g_mutex_unlock (&sync->sink->gl_lock);
+@@ -1219,6 +1222,9 @@ _amc_gl_wait (GstGLSyncMeta * sync_meta, GstGLContext * context)
+   struct gl_sync *sync = sync_meta->data;
+   struct gl_wait wait;
+ 
++  if (sync->sink->flushing)
++    return;
++
+   wait.sync_meta = sync_meta;
+   wait.ret = FALSE;
+   gst_gl_context_thread_add (context,
+-- 
+2.52.0
+
