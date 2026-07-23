@@ -1,8 +1,8 @@
 From 1111111111111111111111111111111111111111 Mon Sep 17 00:00:00 2001
 From: Phillip Abbott <phillipa@vivi.io>
-Date: Wed, 9 Jul 2026 16:45:00 +1000
+Date: Wed, 23 Jul 2026 15:30:00 +1000
 Subject: [PATCH] gstamc: make MediaCodecInfo.isHardwareAccelerated() optional
- on Android < 10 (API < 29)
+ on Android < 10 (API < 29), deriving hardware-ness from codec names
 
 Interim fix, pending upstream report.
 
@@ -14,21 +14,34 @@ gstamc with ZERO registered codecs (no hardware video decoders; all decode
 falls back to software avdec_*).
 
 Treat the lookup as optional: clear the exception, continue with a NULL
-method id, and assume hardware-accelerated = TRUE at the call site. This
-restores hardware codec registration on Android 8/9, and is required for
-hardware decode on the Android 9 target panels. Known limitation: when
-the API is unavailable every codec is reported as hardware-accelerated
-rather than derived -- acceptable, as the alternative is no codecs at
-all. See "Moonraker GStreamer Upgrade" decision record, D3.
+method id, and derive hardware-ness from the codec NAME at the call site,
+using the same heuristic GStreamer 1.20's ranking used for years:
+OMX.google.*, c2.android.* and *.sw.dec are Android's software codecs;
+everything else (vendor OMX.* / c2.*) is assumed hardware.
+
+v2 (2026-07-23): the original version of this patch assumed hardware = TRUE
+for every codec when the API is unavailable. That is NOT safe: software and
+hardware video decoders then tie at GST_RANK_PRIMARY + 1 and decodebin's
+deterministic ordering (element factory name, alphabetical within equal
+rank) picks the winner. On MT9950 (Android 9)
+amcvideodec-omxgoogleh264decoder sorts before
+amcvideodec-omxmtkvideodecoderavc, so the Google SOFTWARE decoder won -- and
+its conservative DPB handling of H.264 streams lacking VUI
+bitstream_restriction (e.g. macOS VideoToolbox output) adds a standing
+~400ms output delay at 480p, making every frame arrive late at the sink and
+be dropped (choppy ~7fps native share). Goldfinger (Amlogic) escaped only
+because omxamlogicavcdecoderawesome happens to sort before
+omxgoogleh264decoder. Deriving from names restores 1.20's selection
+behaviour: vendor hardware decoders outrank Android's software codecs.
 ---
- subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c | 19 +-
- 1 file changed, 16 insertions(+), 3 deletions(-)
+ .../sys/androidmedia/jni/gstamc-codeclist-jni.c    | 44 +++++++++++++++++++---
+ 1 file changed, 38 insertions(+), 6 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c b/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c
-index 1111111111..2222222222 100644
+index a18e0195fd..ea0e6ec586 100644
 --- a/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c
 +++ b/subprojects/gst-plugins-bad/sys/androidmedia/jni/gstamc-codeclist-jni.c
-@@ -163,10 +163,16 @@
+@@ -163,10 +163,16 @@ gst_amc_codeclist_jni_static_init (void)
        gst_amc_jni_get_method_id (env, &err, media_codecinfo.klass,
        "isHardwareAccelerated", "()Z");
    if (!media_codecinfo.is_hardware_accelerated) {
@@ -38,27 +51,48 @@ index 1111111111..2222222222 100644
 +     * Android 8/9 the method is absent and the lookup throws
 +     * NoSuchMethodError, which aborted codec-list init and left gstamc with
 +     * zero registered codecs (no hardware decoders). Treat it as optional;
-+     * gst_amc_codec_info_handle_is_hardware_accelerated() assumes TRUE when
-+     * the method id is NULL. */
++     * gst_amc_codec_info_handle_is_hardware_accelerated() derives the
++     * answer from the codec name when the method id is NULL. */
 +    GST_WARNING ("android.media.MediaCodecInfo.isHardwareAccelerated() "
-+        "unavailable (API < 29), assuming hardware accelerated: %s",
++        "unavailable (API < 29), will derive from codec names: %s",
 +        err ? err->message : "no such method");
      g_clear_error (&err);
 -    return FALSE;
    }
  
    media_codeccapabilities.klass =
-@@ -331,6 +337,13 @@
+@@ -329,6 +335,32 @@ gst_amc_codec_info_handle_is_hardware_accelerated (GstAmcCodecInfoHandle *
+   g_return_val_if_fail (handle != NULL, FALSE);
+   g_return_val_if_fail (is_hardware_accelerated != NULL, FALSE);
  
-   env = gst_amc_jni_get_env ();
- 
-+  /* Method unavailable on API < 29 (see gst_amc_codeclist_jni_static_init):
-+   * assume hardware accelerated so codec enumeration/ranking still works. */
 +  if (!media_codecinfo.is_hardware_accelerated) {
-+    *is_hardware_accelerated = TRUE;
++    /* API < 29: isHardwareAccelerated() unavailable. Derive hardware-ness
++     * from the codec name, matching the heuristic GStreamer 1.20 used for
++     * ranking: OMX.google.*, c2.android.* and *.sw.dec are Android's
++     * software codecs; anything else (vendor OMX.* / c2.*) is assumed
++     * hardware. Blanket-TRUE is NOT safe here: it ties software and
++     * hardware decoders at the same rank, and element-factory name order
++     * then decides -- e.g. on MT9950 (Android 9) the Google SW H.264
++     * decoder beat the MTK hardware decoder, causing choppy 480p native
++     * share (deep DPB output delay on VUI-less streams). */
++    gchar *name = gst_amc_codec_info_handle_get_name (handle, err);
++
++    if (!name)
++      return FALSE;
++
++    *is_hardware_accelerated = !(g_str_has_prefix (name, "OMX.google.") ||
++        g_str_has_prefix (name, "c2.android.") ||
++        g_str_has_suffix (name, ".sw.dec"));
++
++    GST_INFO ("isHardwareAccelerated() unavailable (API < 29): derived %s "
++        "from codec name %s", *is_hardware_accelerated ? "HW" : "SW", name);
++
++    g_free (name);
 +    return TRUE;
 +  }
 +
+   env = gst_amc_jni_get_env ();
+ 
    if (!gst_amc_jni_call_boolean_method (env, err, handle->object,
-           media_codecinfo.is_hardware_accelerated, is_hardware_accelerated))
-     return FALSE;
+-- 
+2.52.0
