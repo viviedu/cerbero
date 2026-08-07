@@ -55,7 +55,7 @@ steps:
   - label: ":pipeline: Deploy"
     depends_on: deploy_input
     agents:
-      queue: v3
+      queue: v6
     command: ".buildkite/pipeline-deploy.sh | buildkite-agent pipeline upload"
     env:
       VIVI_FILENAME: ${VIVI_FILENAME}
