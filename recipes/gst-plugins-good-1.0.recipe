@@ -40,6 +40,9 @@ class Recipe(custom.GStreamer):
             'libvpx', 'libdv', 'cairo', 'opencore-amr']
     use_system_libs = True
 
+    # Patches are authored against the monorepo layout (a/subprojects/<module>/...);
+    # tarballs are module-rooted, so strip the extra two components (strip=3).
+    strip = 3
     patches = ['gst-plugins-good-1.0/0001-qtdemux-Raise-max-atom-size.patch',
                'gst-plugins-good-1.0/0002-gstsouphttpsrc-remove-shared-session-check-in-auth_c.patch',
                'gst-plugins-good-1.0/0003-soup-Just-set-User-Agent-on-the-session.patch',

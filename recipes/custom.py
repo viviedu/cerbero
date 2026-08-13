@@ -25,7 +25,15 @@ class GStreamer(recipe.Recipe):
     tagged_for_release = False
 
     # Decide what stype to use
-    use_git = True
+    # Vivi: build from the release tarballs (upstream release behaviour). Git
+    # mode puts every gst recipe on ONE shared monorepo checkout, and cerbero
+    # dedups extracts per source dir within an invocation, so only the first
+    # gst recipe to extract gets its patches applied -- every other recipe
+    # compiles unpatched (vivi-274 shipped with no androidmedia patches this
+    # way). Tarball mode gives each recipe its own source tree, so patches
+    # always apply. Requires strip=3 on recipes whose patches carry monorepo
+    # subprojects/<module>/ path prefixes.
+    use_git = False
     if tagged_for_release:
         # If we're using a manifest, that means we want to use the specified
         # commits and remotes.
