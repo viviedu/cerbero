@@ -17,12 +17,11 @@ steps:
     agents:
       queue: thicc
     plugins:
-      - docker-compose#v3.2.0:
+      - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: bootstrap
-          image-repository: ${GLOBAL_DOCKER_REGISTRY}/build-cache
-          image-name: ${BUILDKITE_PIPELINE_SLUG}-bootstrap
           cache-from: bootstrap:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-bootstrap
+          push: bootstrap:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-bootstrap
 
   - label: ":package: Package"
     key: package
@@ -31,21 +30,20 @@ steps:
       queue: thicc
     command: .buildkite/scripts/package.sh
     plugins:
-      - viviedu/docker-compose#dd0a3f4:
+      - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: package
           args:
             - GLOBAL_DOCKER_REGISTRY
             - BUILDKITE_PIPELINE_SLUG
-          image-repository: ${GLOBAL_DOCKER_REGISTRY}/build-cache
-          image-name: ${BUILDKITE_PIPELINE_SLUG}-package
           cache-from: package:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-package
+          push: package:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-package
           run: package
           env:
             - VIVI_FILENAME=${VIVI_FILENAME}
           volumes:
             - ./artifacts:/workspace/artifacts
-      - artifacts#v1.2.0:
+      - artifacts#v1.9.4:
           upload:
             - artifacts/${VIVI_FILENAME}
 
@@ -55,7 +53,7 @@ steps:
   - label: ":pipeline: Deploy"
     depends_on: deploy_input
     agents:
-      queue: v3
+      queue: v6
     command: ".buildkite/pipeline-deploy.sh | buildkite-agent pipeline upload"
     env:
       VIVI_FILENAME: ${VIVI_FILENAME}

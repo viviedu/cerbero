@@ -15,5 +15,5 @@ steps:
   - label: ":pipeline: Build"
     depends_on: build_input
     agents:
-      queue: v3
+      queue: v6
     command: ".buildkite/pipeline-build.sh | buildkite-agent pipeline upload"

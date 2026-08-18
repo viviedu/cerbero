@@ -12,10 +12,10 @@ steps:
     depends_on:
       - package
     agents:
-      queue: v3
+      queue: v6
     command: .buildkite/scripts/links.sh ${VIVI_FILENAME}
     plugins:
-      - artifacts#309df16:
+      - artifacts#v1.9.4:
           download:
             - from: artifacts/${VIVI_FILENAME}
               to: ${VIVI_FILENAME}

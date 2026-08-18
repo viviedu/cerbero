@@ -21,7 +21,7 @@ class Recipe(recipe.Recipe):
         'tinyalsa/0003-fix-makefile.patch',
     ]
 
-    files_devel = [ 'include/tinyalsa/' ]
+    files_devel = [ 'include/tinyalsa/', '%(libdir)s/pkgconfig/tinyalsa.pc' ]
 
     files_libs = [ 'libtinyalsa' ]
 
@@ -49,3 +49,21 @@ class Recipe(recipe.Recipe):
         shutil.copy(tinyalsa_version, include_path)
         shutil.copy(tinyalsa_lib, library_path)
         shutil.copy(tinyalsa_lib_so, library_path)
+
+        # gst-plugins-bad >= 1.18 locates tinyalsa via pkg-config only, so
+        # install a tinyalsa.pc by hand (the Makefile build doesn't ship one).
+        # Version must satisfy the >= 1.1.0 check; the source is git tag 1.1.1.
+        pkgconfig_path = os.path.join(library_path, 'pkgconfig')
+        if not os.path.exists(pkgconfig_path):
+            os.makedirs(pkgconfig_path)
+        with open(os.path.join(pkgconfig_path, 'tinyalsa.pc'), 'w') as f:
+            f.write('prefix={}\n'
+                    'libdir={}\n'
+                    'includedir=${{prefix}}/include\n'
+                    '\n'
+                    'Name: tinyalsa\n'
+                    'Description: TinyALSA library\n'
+                    'Version: 1.1.1\n'
+                    'Libs: -L${{libdir}} -ltinyalsa\n'
+                    'Cflags: -I${{includedir}}\n'.format(
+                        self.config.prefix, library_path))
