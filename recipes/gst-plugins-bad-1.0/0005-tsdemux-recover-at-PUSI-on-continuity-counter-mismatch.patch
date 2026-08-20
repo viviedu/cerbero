@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Igor Tyshchenko <igort@vivi.io>
+Date: Thu, 20 Aug 2026 12:00:00 +1000
+Subject: [PATCH] tsdemux: recover at PUSI on continuity counter mismatch
+
+GStreamer 1.26.11 (upstream commit 3a0229a7f8, gstreamer!10560) made
+tsdemux drop the current packet on a continuity counter mismatch even
+when it starts a new payload unit. YouTube HLS TS segments restart
+their counters at every segment boundary, so the keyframe PES that
+starts each segment was discarded and YTDL video melted or froze.
+Restore the old recover-at-PUSI behaviour: discard any stale partial
+PES header and process the packet as the start of a new PES. Remove
+once upstream restores this or auto-enables the
+ignore-continuity-counter property (gstreamer!11884) for HLS.
+---
+ subprojects/gst-plugins-bad/gst/mpegtsdemux/tsdemux.c | 25 +++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
+
+--- a/subprojects/gst-plugins-bad/gst/mpegtsdemux/tsdemux.c
++++ b/subprojects/gst-plugins-bad/gst/mpegtsdemux/tsdemux.c
+@@ -3869,10 +3869,21 @@
+       packet->pid, packet->payload_unit_start_indicator,
+       packet->scram_afc_cc & 0x30, cc, packet->payload);
+ 
+-  /* Check continuity */
++  /* Check continuity.
++   *
++   * A mismatch is fatal, except if this packet starts a new payload unit
++   * (from which we can recover): any stale partial PES header is dropped,
++   * the pending payload is flushed downstream by the
++   * payload_unit_start_indicator handling below, and this packet is
++   * processed as the start of a new PES. This matches the behaviour of
++   * gst_ts_demux_queue_data() up to 1.24, and is required for streams whose
++   * continuity counters restart at (self-contained) segment boundaries,
++   * e.g. YouTube HLS MPEG-TS segments, where dropping the packet would
++   * discard the keyframe PES that starts each segment. */
+   if (stream->continuity_counter != CONTINUITY_UNSET) {
+     if (((stream->continuity_counter + 1) % 16) != cc) {
+-      if (stream->state != PENDING_PACKET_EMPTY) {
++      if (stream->state != PENDING_PACKET_EMPTY
++          && !packet->payload_unit_start_indicator) {
+ #ifndef GST_DISABLE_GST_DEBUG
+         gchar *pad_name = gst_pad_get_name (stream->pad);
+         GST_ELEMENT_WARNING_WITH_DETAILS (demux, STREAM, DEMUX,
+@@ -3899,6 +3910,14 @@
+         stream->state = PENDING_PACKET_EMPTY;
+ 
+         return GST_FLOW_OK;
++      } else if (stream->state != PENDING_PACKET_EMPTY
++          && G_UNLIKELY (stream->pending_header_data)) {
++        /* Recovering at a payload unit start: drop any stale partial PES
++         * header so this packet's header is parsed fresh. Pending payload
++         * is flushed downstream by the handling below. */
++        g_free (stream->pending_header_data);
++        stream->pending_header_data = NULL;
++        stream->pending_header_size = 0;
+       }
+     }
+   }
