@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phillip Abbott <phillipa@vivi.io>
+Date: Tue, 8 Sep 2026 10:00:00 +1000
+Subject: [PATCH] adaptivedemux: never block on the manifest lock when handling
+ source errors
+
+The legacy adaptivedemux (hlsdemux under playbin/uridecodebin v2) can
+deadlock a whole pipeline, and with it any thread that then calls
+gst_element_set_state(), whenever one of its stream sources posts an
+HTTP error while the playlist is being refreshed:
+
+  * updates_loop holds MANIFEST_LOCK for the whole of update_manifest,
+    which downloads the playlist through the shared libsoup session.
+  * souphttpsrc posts HTTP status errors synchronously from that shared
+    session thread. The message reaches
+    gst_adaptive_demux_handle_message, which takes MANIFEST_LOCK and
+    blocks, because updates_loop still holds it.
+  * updates_loop's download can never complete: the session thread it
+    depends on is the one parked on the lock. The souphttpsrc task it
+    is joining (gst_pad_stop_task) waits on the same session thread.
+  * The application's PAUSED->READY state change then blocks on
+    MANIFEST_LOCK as well (gst_adaptive_demux_change_state:574) and the
+    UI thread hangs for good.
+
+Seen on every vivi box running YouTube HLS signage once googlevideo
+started answering segment requests with 403 (constant error posts).
+Present in 1.20.1 and unchanged in 1.26.11; upstream considers the
+legacy element superseded by hlsdemux2 (gstreamer#4651 closed without a
+fix), which is not reachable from playbin/uridecodebin v2.
+
+Take the manifest lock with g_rec_mutex_trylock in the ERROR handler.
+If it is busy, forward the error unchanged instead of converting it to
+a retry. The pipeline errors out and the application restarts the item,
+which is what would have happened after MAX_DOWNLOAD_ERROR_COUNT
+retries anyway. Waiting a bounded time would not help: whenever the
+poster is the shared session thread, the lock holder is waiting on
+exactly that thread.
+
+The full 4-thread stacks (debuggerd, symbolized) are in
+vivi-gf-3.13-hls-deadlock-10.0.0.190-2026-09-08.md.
+---
+ .../gst-libs/gst/adaptivedemux/gstadaptivedemux.c | 27 +++++++++++++++++++++-
+ 1 file changed, 26 insertions(+), 1 deletion(-)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/adaptivedemux/gstadaptivedemux.c b/subprojects/gst-plugins-bad/gst-libs/gst/adaptivedemux/gstadaptivedemux.c
+index cf2ede64ff..b6bfada6bf 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/adaptivedemux/gstadaptivedemux.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/adaptivedemux/gstadaptivedemux.c
+@@ -144,6 +144,8 @@ GST_DEBUG_CATEGORY (adaptivedemux_debug);
+     g_rec_mutex_unlock (GST_MANIFEST_GET_LOCK (d)); \
+  } G_STMT_END
+ 
++#define GST_MANIFEST_TRYLOCK(d) (g_rec_mutex_trylock (GST_MANIFEST_GET_LOCK (d)))
++
+ #define GST_API_GET_LOCK(d) (&(GST_ADAPTIVE_DEMUX_CAST(d)->priv->api_lock))
+ #define GST_API_LOCK(d)   g_mutex_lock (GST_API_GET_LOCK (d));
+ #define GST_API_UNLOCK(d) g_mutex_unlock (GST_API_GET_LOCK (d));
+@@ -857,7 +859,30 @@ gst_adaptive_demux_handle_message (GstBin * bin, GstMessage * msg)
+       gchar *new_error = NULL;
+       const GstStructure *details = NULL;
+ 
+-      GST_MANIFEST_LOCK (demux);
++      /* Never block the thread that posted the error on the manifest lock.
++       *
++       * With a shared libsoup session (the default since 1.20), HTTP errors
++       * from a stream's internal source are posted synchronously from the
++       * session thread that services every souphttpsrc in the pipeline. If
++       * the updates task holds the manifest lock while it downloads the
++       * playlist (it does, for the whole of update_manifest), that download
++       * needs the same session thread, which is now parked here waiting for
++       * the lock. Nothing can ever release it: updates_loop -> session
++       * thread -> manifest lock -> updates_loop. A state change to READY
++       * then blocks on the manifest lock too and the application hangs.
++       *
++       * If the lock is busy, give up on the retry path and forward the error
++       * unchanged. The pipeline errors out and the application restarts it,
++       * which is what would have happened after MAX_DOWNLOAD_ERROR_COUNT
++       * retries anyway. Waiting would not help: the holder needs this thread.
++       */
++      if (!GST_MANIFEST_TRYLOCK (demux)) {
++        GST_WARNING_OBJECT (demux,
++            "manifest lock busy while handling error from %" GST_PTR_FORMAT
++            ", forwarding the error instead of retrying",
++            GST_MESSAGE_SRC (msg));
++        break;
++      }
+ 
+       for (iter = demux->streams; iter; iter = g_list_next (iter)) {
+         GstAdaptiveDemuxStream *cur = iter->data;
+-- 
+2.39.5
