@@ -98,8 +98,7 @@ class Recipe(custom.GStreamer):
                'gst-plugins-bad-1.0/0001-Shot-in-the-dark-fix-for-tinyalsa-blocking.patch',
                'gst-plugins-bad-1.0/0002-gstamc-codeclist-optional-isHardwareAccelerated-API28.patch',
                'gst-plugins-bad-1.0/0004-Avoid-issues-with-buffer-cleanup-while-flushing.patch',
-               'gst-plugins-bad-1.0/0005-tsdemux-recover-at-PUSI-on-continuity-counter-mismatch.patch',
-               'gst-plugins-bad-1.0/0006-adaptivedemux-never-block-on-the-manifest-lock-when-handling-source-errors.patch']
+               'gst-plugins-bad-1.0/0005-tsdemux-recover-at-PUSI-on-continuity-counter-mismatch.patch']
 
     files_lang = ['gst-plugins-bad-1.0']
 
