@@ -1,0 +1,26 @@
+From: Alysander Stanley <alysander@vivi.io>
+Date: Tue, 30 Sep 2026 20:40:00 +1000
+Subject: [PATCH] tcp-passive: bind the listener with address reuse
+
+A tcp-passive host candidate listens on the agent's port range. When the
+previous connection on that port is still in TIME_WAIT, a bind without
+SO_REUSEADDR fails with EADDRINUSE, and with a one-port range the whole
+gather fails and every candidate is freed. Binding with reuse lets the
+listener take a port whose last connection is in TIME_WAIT; a port with
+a live listener still refuses.
+---
+ socket/tcp-passive.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/socket/tcp-passive.c b/socket/tcp-passive.c
+--- a/socket/tcp-passive.c
++++ b/socket/tcp-passive.c
+@@ -129,7 +129,7 @@
+   /* GSocket: All socket file descriptors are set to be close-on-exec. */
+   g_socket_set_blocking (gsock, false);
+ 
+-  gret = g_socket_bind (gsock, gaddr, FALSE, error) &&
++  gret = g_socket_bind (gsock, gaddr, TRUE, error) &&
+       g_socket_listen (gsock, error);
+   g_object_unref (gaddr);
+ 

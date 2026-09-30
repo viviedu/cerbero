@@ -17,7 +17,9 @@ class Recipe(recipe.Recipe):
     deps = ['glib', 'gstreamer-1.0']
 
     # https://gitlab.freedesktop.org/libnice/libnice/-/merge_requests/277, remove on bump
-    patches = ['libnice/0001-meson-Add-glib-debug-assert-and-check-options.patch']
+    patches = ['libnice/0001-meson-Add-glib-debug-assert-and-check-options.patch',
+               # The listener bind fails over a TIME_WAIT socket on a one-port range.
+               'libnice/0002-tcp-passive-bind-the-listener-with-reuse.patch']
 
     files_bins = ['stunbdc', 'stund']
     files_libs = ['libnice']
