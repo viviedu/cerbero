@@ -180,6 +180,18 @@ class Recipe(custom.GStreamer):
         ]
 
     def prepare(self):
+        if self.config.variants.imx:
+            # Vivi i.MX-only patches from gstreamer-gitlab vivi-1.20.1
+            self.patches += [
+                'gst-plugins-base-1.0/imx/0001-playback-Use-imx-elements.patch',
+                'gst-plugins-base-1.0/imx/0002-Shade-textoverlay-background-with-alpha-as-well.patch',
+                'gst-plugins-base-1.0/imx/0003-Precalculate-alpha_offset.patch',
+            ]
+            # No GL winsys without x11/system libs; the i.MX box renders through gstreamer-imx, not libgstgl
+            self.disable_plugin('opengl', 'sys', 'gl', library_name='gl')
+            self.meson_options['gl-graphene'] = 'disabled'
+            self.meson_options['gl-png'] = 'disabled'
+            self.meson_options['gl-jpeg'] = 'disabled'
         self.enable_plugin('cdparanoia', 'sys', 'cdparanoia', dep='cdparanoia')
         self.enable_plugin('ximagesink', 'sys', 'x11', option='x11')
         self.enable_plugin('xvimagesink', 'sys', 'x11', option='xvideo')
