@@ -1,0 +1,12 @@
+ARG GLOBAL_DOCKER_REGISTRY
+ARG BUILDKITE_PIPELINE_SLUG
+FROM $GLOBAL_DOCKER_REGISTRY/build-cache:$BUILDKITE_PIPELINE_SLUG-imx-base
+
+WORKDIR /workspace
+
+COPY . ./
+
+# Host packages come from the imx-base image, so cerbero only builds its build-tools here
+RUN ./cerbero-uninstalled -c config/cross-lin-imx6.cbc bootstrap -y --system=no
+
+RUN ./cerbero-uninstalled -c config/cross-lin-imx6.cbc package --only-build-deps gstreamer-1.0
