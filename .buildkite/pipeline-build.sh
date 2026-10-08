@@ -2,6 +2,7 @@
 set -euo pipefail
 
 bootstrap=$(buildkite-agent meta-data get "bootstrap" --default "false")
+bootstrap_imx=$(buildkite-agent meta-data get "bootstrap_imx" --default "false")
 
 VIVI_FILENAME="gstreamer-1.0-android-universal-1.26.11-vivi-${BUILDKITE_BUILD_NUMBER}.tar.xz"
 VIVI_IMX_FILENAME="gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-${BUILDKITE_BUILD_NUMBER}.tar.xz"
@@ -51,7 +52,7 @@ steps:
 
   - label: ":boot: i.MX base image"
     key: imx_base
-    if: "'${bootstrap}' == 'true'"
+    if: "'${bootstrap_imx}' == 'true'"
     agents:
       queue: thicc
     plugins:
@@ -63,7 +64,7 @@ steps:
 
   - label: ":boot: i.MX bootstrap"
     key: imx_bootstrap
-    if: "'${bootstrap}' == 'true'"
+    if: "'${bootstrap_imx}' == 'true'"
     depends_on: imx_base
     agents:
       queue: thicc

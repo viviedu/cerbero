@@ -11,6 +11,15 @@ steps:
             value: "true"
           - label: "No"
             value: "false"
+      - select: Bootstrap i.MX
+        key: bootstrap_imx
+        hint: "Whether to build the i.MX base and bootstrap images, DO NOT SAY YES unless you really need to"
+        default: "false"
+        options:
+          - label: "Yes"
+            value: "true"
+          - label: "No"
+            value: "false"
 
   - label: ":pipeline: Build"
     depends_on: build_input
