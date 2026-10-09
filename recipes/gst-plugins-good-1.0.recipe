@@ -253,6 +253,9 @@ class Recipe(custom.GStreamer):
 
         self.enable_plugin('video4linux2', 'capture', variant='v4l2', option='v4l2')
         self.enable_plugin('ximagesrc', 'capture', variant='x11')
+        if self.config.variants.imx:
+            # Link-time libpulse from the box's Debian packages; the device provides it at runtime
+            self.deps.append('libpulse-imx')
         self.enable_plugin('pulseaudio', 'sys', variant='pulse', option='pulse')
 
         # Enable qt5 plugin if possible and selected

@@ -10,5 +10,5 @@ target_arch_flags = '-mfpu=neon -mfloat-abi=hard'
 allow_system_libs = False
 # cerbero skips glib-tools for Linux targets; needed here as no system glib-mkenums is used
 extra_build_tools = ['glib-tools']
-variants.override(['noalsa', 'nox11', 'nopulse', 'nocdparanoia',
+variants.override(['noalsa', 'nox11', 'pulse', 'nocdparanoia',
                    'nov4l2', 'notestspackage', 'nopython', 'norust', 'nogi', 'imx'])

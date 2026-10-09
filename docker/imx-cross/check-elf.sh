@@ -5,8 +5,10 @@ dir="${1:?usage: check-elf.sh <dir>}"
 readelf="${READELF:-arm-linux-gnueabihf-readelf}"
 objdump="${OBJDUMP:-arm-linux-gnueabihf-objdump}"
 max_glibc="${MAX_GLIBC:-2.36}"
+skip="${SKIP_RE:-/libpulse\.so}"   # device-provided link stubs, not shipped
 bad=0; n=0
 while IFS= read -r -d '' f; do
+  [[ "$f" =~ $skip ]] && continue
   n=$((n + 1))
   attrs=$("$readelf" -A "$f" 2>/dev/null)
   for tag in 'Tag_ABI_VFP_args: VFP registers' 'Tag_Advanced_SIMD_arch: NEONv1' 'Tag_CPU_arch: v7'; do
