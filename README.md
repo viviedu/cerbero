@@ -377,3 +377,55 @@ You can then run Cerbero with e.g.:
 ```cmd
 ./cerbero-uninstalled -c localconf.cbc -c config/win64.cbc -v visualstudio package gstreamer-1.0
 ```
+
+# Vivi builds
+
+This fork builds the GStreamer libraries for two Vivi platforms from one branch. Everything upstream in this README still applies; this section covers what Vivi adds.
+
+| | Android (Goldfinger, Moonraker, Thunderball) | i.MX6 box |
+|---|---|---|
+| Config | `config/cross-android-universal.cbc` | `config/cross-lin-imx6.cbc` |
+| Target | arm64 + armv7 universal, NDK toolchain | ARMv7-A hard-float NEON, Debian bookworm glibc 2.36, `gcc-arm-linux-gnueabihf` |
+| Variant switch | none | `imx` (set by the config; off everywhere else) |
+| Vivi patches | base/good/bad patches in `recipes/` | the same, plus three i.MX-only patches under `recipes/gst-plugins-base-1.0/imx/` applied only when `imx` is on |
+| Dependencies | all bundled | all bundled, except libpulse: `recipes/libpulse-imx.recipe` installs a link stub from the box's own Debian packages so the `pulseaudio` plugin resolves the device's `libpulse.so.0` at runtime |
+| Disabled on purpose | debug symbols (`nodebug`) | libgstgl/opengl (no GL winsys on the box), rust, x11, alsa, v4l2 |
+| Runtime tarball | unstripped | stripped (`strip = True` in the gstreamer-1.0 package when `imx` is on) |
+
+Changes that apply to every Linux cross build (not Android): `config/linux.config` maps ARMv7 Debian to the hard-float triplet, adds the prefix include path and keeps `-Wl,-rpath-link` in LDFLAGS only; `cerbero/build/build.py` passes the cross assembler to cmake. Native Linux builds are unaffected.
+
+## Outputs
+
+| Platform | Artifact | Contents |
+|---|---|---|
+| Android | `gstreamer-1.0-android-universal-1.26.11-vivi-<build>.tar.xz` | full SDK (runtime + devel), as before |
+| i.MX | `gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-<build>.tar.xz` | stripped runtime: `lib/arm-linux-gnueabihf/` libraries and `gstreamer-1.0/` plugins, `bin/gst-*`, `etc/ssl`, GIO modules |
+| i.MX | `gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-<build>-devel.tar.xz` | headers, `.pc` files, static libs and debug symbols for building the vivi-box addon |
+
+The i.MX runtime bundles its own glib, libsoup 3 and OpenSSL. A process using it must set `LD_LIBRARY_PATH` to the tarball's `lib/arm-linux-gnueabihf`, `GST_PLUGIN_PATH` to its `gstreamer-1.0/` plus the gstreamer-imx plugin directory, `GST_PLUGIN_SYSTEM_PATH=` (empty), `GIO_EXTRA_MODULES` to its `gio/modules`, and `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`. The gstreamer-imx 0.13 plugins (`imxvpu`, `imxg2d`, …) are not built here; the box's existing ones load against this core.
+
+## Buildkite: separate bootstrap and cache per platform
+
+The pipeline has two independent chains that share nothing but the checkout:
+
+| Step | Android | i.MX |
+|---|---|---|
+| Build input | **Bootstrap** | **Bootstrap i.MX** |
+| Base image | (part of bootstrap) | `imx-base` from `docker/imx-cross/Dockerfile`: host packages and the armhf cross toolchain |
+| Bootstrap image | `bootstrap` → `build-cache:<pipeline>-bootstrap` | `imx-bootstrap` → `build-cache:<pipeline>-imx-bootstrap` (bootstrap plus `package --only-build-deps`) |
+| Package step | `package` → `scripts/package.sh` | `imx-package` → `scripts/package-imx.sh` (builds recipes missing from the cache, force-rebuilds the patched recipes, runs the ELF gate, packages) |
+| Cache tags | `-bootstrap`, `-package` | `-imx-base`, `-imx-bootstrap`, `-imx-package` |
+
+Answer "Yes" to a bootstrap input only when that platform's dependency set changed (new recipe, toolchain or host package); it rebuilds that platform's cache images and takes hours. A normal push runs only the two package steps. The Deploy step waits for both package steps and publishes both artifacts.
+
+## Building the i.MX tarball locally
+
+```
+docker/imx-cross/run.sh './cerbero-uninstalled -c config/cross-lin-imx6.cbc bootstrap -y --system=no'   # once
+docker/imx-cross/run.sh './cerbero-uninstalled -c config/cross-lin-imx6.cbc package gstreamer-1.0'
+docker/imx-cross/check-elf.sh build/dist/linux_armv7/lib/arm-linux-gnueabihf      # inside the container
+docker/imx-cross/plugin-diff.sh <runtime-tarball> <dome-os>/usr/local/lib/arm-linux-gnueabihf/gstreamer-1.0
+docker/imx-cross/smoke-test.sh <runtime-tarball>                                   # runs it in an armhf container
+```
+
+`run.sh` mounts the checkout at `/workspace` and keeps cerbero's `build/` in the Docker volume `cerbero-imx-build`.

@@ -23,7 +23,9 @@ class Package(custom.GStreamer, package.Package):
             'gst-rtsp-server-1.0:plugins_net_devel']
 
     def prepare(self):
+        # The i.MX cross build bundles its own glib; it has no system glib-networking to lean on
         if self.config.target_platform != Platform.LINUX or \
+           self.config.variants.imx or \
            self.config.target_distro_version  in \
                 [DistroVersion.DEBIAN_SQUEEZE,
                  DistroVersion.UBUNTU_MAVERICK,

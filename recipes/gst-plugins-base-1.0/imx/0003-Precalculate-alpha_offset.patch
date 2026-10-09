@@ -1,0 +1,37 @@
+From d4a3a457e0f3c4e3dc36d883d2861ac6c5fc91ae Mon Sep 17 00:00:00 2001
+From: Jake Barnes <jakerodneybarnes@gmail.com>
+Date: Thu, 22 Nov 2018 13:16:04 +1100
+Subject: [PATCH 3/3] Precalculate alpha_offset
+
+(cherry picked from commit 3c5dd8ec8153e385588e4d7b8bdb0bac2a91984a)
+---
+ subprojects/gst-plugins-base/ext/pango/gstbasetextoverlay.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/subprojects/gst-plugins-base/ext/pango/gstbasetextoverlay.c b/subprojects/gst-plugins-base/ext/pango/gstbasetextoverlay.c
+index e5fa432934..f8b238aa24 100644
+--- a/subprojects/gst-plugins-base/ext/pango/gstbasetextoverlay.c
++++ b/subprojects/gst-plugins-base/ext/pango/gstbasetextoverlay.c
+@@ -2257,7 +2257,7 @@ gint x0, gint x1, gint y0, gint y1) \
+   gint i, j;\
+   guint8 *dest_ptr;\
+   guint stride;\
+-  gint alpha_offset[2] = { 3, 0 };\
++  const gint alpha_offset = OFFSET == 1 ? 0 : 3;\
+   \
+   dest_ptr = GST_VIDEO_FRAME_PLANE_DATA (dest, 0);\
+   stride = GST_VIDEO_FRAME_PLANE_STRIDE (dest, 0);\
+@@ -2266,8 +2266,8 @@ gint x0, gint x1, gint y0, gint y1) \
+     for (j = x0; j < x1; j++) {\
+       gint y, y_pos, k;\
+       y_pos = (i * stride) + j * 4;\
+-      if (dest_ptr[y_pos + alpha_offset[OFFSET]] == 0) {\
+-        dest_ptr[y_pos + alpha_offset[OFFSET]] = overlay->shading_value;\
++      if (dest_ptr[y_pos + alpha_offset] == 0) {\
++        dest_ptr[y_pos + alpha_offset] = overlay->shading_value;\
+       } else {\
+         for (k = OFFSET; k < 3+OFFSET; k++) {\
+           y = dest_ptr[y_pos + k] - overlay->shading_value;\
+-- 
+2.52.0
+
