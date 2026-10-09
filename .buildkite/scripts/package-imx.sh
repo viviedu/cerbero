@@ -9,6 +9,10 @@ VIVI_PATCHED_RECIPES=(
   gst-plugins-bad-1.0
 )
 CFG=config/cross-lin-imx6.cbc
+
+# buildone skips dependencies, so first build any recipe added since the bootstrap image was cached
+./cerbero-uninstalled -c "$CFG" package --only-build-deps gstreamer-1.0
+
 ./cerbero-uninstalled -c "$CFG" buildone "${VIVI_PATCHED_RECIPES[@]}"
 
 # Gate: every library must be ARMv7 hard-float NEON and need no glibc newer than the box's 2.36
