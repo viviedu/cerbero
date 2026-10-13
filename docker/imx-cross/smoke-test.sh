@@ -27,6 +27,8 @@ req_ok=0; for p in coreelements playback soup hls rtsp mpegtsdemux isomp4 libav 
 check required [ "$req_ok" -eq 0 ]
 check videotest gst-launch-1.0 -q videotestsrc num-buffers=30 ! videoconvert ! fakesink
 check audio-opus gst-launch-1.0 -q audiotestsrc num-buffers=100 ! opusenc ! opusdec ! fakesink
+check textoverlay-alpha gst-launch-1.0 -q videotestsrc num-buffers=5 ! video/x-raw,format=BGRA ! textoverlay text=vivi shaded-background=true ! fakesink
+check playsink-imx [ "$(grep -ac imxipuvideotransform /opt/gst/lib/arm-linux-gnueabihf/gstreamer-1.0/libgstplayback.so)" -ge 1 ]
 check https timeout 60 gst-launch-1.0 -q souphttpsrc location=https://gstreamer.freedesktop.org/ ! fakesink
 check glib-resolves bash -c "ldd /opt/gst/lib/arm-linux-gnueabihf/libgstreamer-1.0.so.0 | grep libglib-2.0 | grep -q /opt/gst"
 check glibc-host bash -c "ldd --version | head -1 | grep -q 2.36"
