@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phillip Abbott <phillipa@vivi.io>
+Date: Wed, 8 Oct 2026 15:00:00 +1100
+Subject: [PATCH] liba52: add soversion so the shared library is versioned
+
+---
+ liba52/meson.build | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/liba52/meson.build b/liba52/meson.build
+--- a/liba52/meson.build
++++ b/liba52/meson.build
+@@ -12,6 +12,7 @@ liba52 = library(
+     include_directories: incdir,
+     dependencies: m_dep,
+     gnu_symbol_visibility: 'default',
++    soversion: '0',
+     install: true,
+ )
+ 
