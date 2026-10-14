@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 ENV DEBIAN_FRONTEND noninteractive
 
-# Cerbero host prerequisites (as .buildkite/Dockerfile.bootstrap) plus the Debian armhf cross toolchain
+# Block 1: .buildkite/Dockerfile.bootstrap verbatim, plus the Debian armhf cross toolchain and git/file/xz-utils
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y \
@@ -26,7 +26,7 @@ RUN apt-get update && \
         && \
     apt-get clean
 
-# Host packages cerbero's DebianBootstrapper would install (containers are ephemeral, so bake them in)
+# Block 2: DebianBootstrapper.packages from cerbero/bootstrap/linux.py, baked in here since bootstrap runs with --system=no
 RUN apt-get update && \
     apt-get install -y \
         autoconf \
