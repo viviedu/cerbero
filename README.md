@@ -404,6 +404,20 @@ Changes that apply to every Linux cross build (not Android): `config/linux.confi
 
 The i.MX runtime bundles its own glib, libsoup 3 and OpenSSL. A process using it must set `LD_LIBRARY_PATH` to the tarball's `lib/arm-linux-gnueabihf`, `GST_PLUGIN_PATH` to its `gstreamer-1.0/` plus the gstreamer-imx plugin directory, `GST_PLUGIN_SYSTEM_PATH=` (empty), `GIO_EXTRA_MODULES` to its `gio/modules`, and `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`. The gstreamer-imx 0.13 plugins (`imxvpu`, `imxg2d`, …) are not built here; the box's existing ones load against this core.
 
+## Buildkite: separate bootstrap and cache per platform
+
+The pipeline has two independent chains that share nothing but the checkout:
+
+| Step | Android | i.MX |
+|---|---|---|
+| Build input | **Bootstrap** | **Bootstrap i.MX** |
+| Base image | (part of bootstrap) | `imx-base` from `docker/imx-cross/Dockerfile`: host packages and the armhf cross toolchain |
+| Bootstrap image | `bootstrap` → `build-cache:<pipeline>-bootstrap` | `imx-bootstrap` → `build-cache:<pipeline>-imx-bootstrap` (bootstrap plus `package --only-build-deps`) |
+| Package step | `package` → `scripts/package.sh` | `imx-package` → `scripts/package-imx.sh` (builds recipes missing from the cache, force-rebuilds the patched recipes, runs the ELF gate, packages) |
+| Cache tags | `-bootstrap`, `-package` | `-imx-base`, `-imx-bootstrap`, `-imx-package` |
+
+Answer "Yes" to a bootstrap input only when that platform's dependency set changed (new recipe, toolchain or host package); it rebuilds that platform's cache images and takes hours. A normal push runs only the two package steps. The Deploy step waits for both package steps and publishes both artifacts.
+
 ## Building the i.MX tarball locally
 
 ```
