@@ -7,7 +7,7 @@ tarball="$(cd "$(dirname "$tarball")" && pwd)/$(basename "$tarball")"
 results="$(dirname "$tarball")/SMOKE-RESULTS.txt"
 docker run --rm -i --platform linux/arm/v7 -v "$tarball":/gst.tar.xz:ro debian:bookworm bash -s <<'EOF' | tee "$results"
 set -uo pipefail
-apt-get update -qq >/dev/null && apt-get install -y -qq xz-utils ca-certificates >/dev/null 2>&1
+apt-get update -qq >/dev/null && apt-get install -y -qq xz-utils ca-certificates libpulse0 >/dev/null 2>&1
 mkdir -p /opt/gst && tar xJf /gst.tar.xz -C /opt/gst
 export LD_LIBRARY_PATH=/opt/gst/lib/arm-linux-gnueabihf
 export GST_PLUGIN_PATH=/opt/gst/lib/arm-linux-gnueabihf/gstreamer-1.0
