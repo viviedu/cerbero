@@ -410,7 +410,6 @@ The i.MX runtime bundles its own glib, libsoup 3 and OpenSSL. A process using it
 docker/imx-cross/run.sh './cerbero-uninstalled -c config/cross-lin-imx6.cbc bootstrap -y --system=no'   # once
 docker/imx-cross/run.sh './cerbero-uninstalled -c config/cross-lin-imx6.cbc package gstreamer-1.0'
 docker/imx-cross/check-elf.sh build/dist/linux_armv7/lib/arm-linux-gnueabihf      # inside the container
-docker/imx-cross/plugin-diff.sh <runtime-tarball> <dome-os>/usr/local/lib/arm-linux-gnueabihf/gstreamer-1.0
 docker/imx-cross/smoke-test.sh <runtime-tarball>                                   # runs it in an armhf container
 ```
 
