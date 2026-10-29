@@ -1,10 +1,26 @@
 #!/bin/bash
-# Check every *.so* under $1 is ARMv7 hard-float NEON and needs no glibc newer than 2.36.
+# Check every *.so* under a directory carries the i.MX6 box's ABI. See --help.
 # Hard-float is the box's Debian armhf ABI: its glibc and libpulse pass floats in VFP registers, and the loader
 # refuses to mix hard- and soft-float objects. v7 and NEON are the Cortex-A9 features the .cbc selects with
 # -mfpu=neon (matching the box's existing GStreamer libs); asserting them catches a build where those flags were lost.
 set -uo pipefail
-dir="${1:?usage: check-elf.sh <dir>}"
+usage() {
+  cat <<EOT
+usage: check-target-abi.sh <dir>
+
+Gate for the i.MX6 cross build: checks every *.so* under <dir> will load on the box.
+Each library must
+  - be ARMv7 with NEON (Tag_CPU_arch: v7, Tag_Advanced_SIMD_arch: NEONv1)
+  - use the hard-float ABI (Tag_ABI_VFP_args: VFP registers), as Debian armhf does
+  - need no glibc symbol version newer than \$MAX_GLIBC (default 2.36, the box's bookworm glibc)
+Prints one FAIL line per violation and exits 1, or "OK <n> files" and exits 0.
+Run inside the cross-build container, e.g. after a package step:
+  docker/imx-cross/check-target-abi.sh build/dist/linux_armv7/lib/arm-linux-gnueabihf
+Environment: READELF, OBJDUMP (default arm-linux-gnueabihf-*), MAX_GLIBC.
+EOT
+}
+case "${1:-}" in -h|--help) usage; exit 0;; '') usage >&2; exit 2;; esac
+dir="$1"
 readelf="${READELF:-arm-linux-gnueabihf-readelf}"
 objdump="${OBJDUMP:-arm-linux-gnueabihf-objdump}"
 max_glibc="${MAX_GLIBC:-2.36}"
