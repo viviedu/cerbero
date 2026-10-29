@@ -16,7 +16,7 @@ CFG=config/cross-lin-imx6.cbc
 ./cerbero-uninstalled -c "$CFG" buildone "${VIVI_PATCHED_RECIPES[@]}"
 
 # Gate: every library must be ARMv7 hard-float NEON and need no glibc newer than the box's 2.36
-docker/imx-cross/check-elf.sh build/dist/linux_armv7/lib/arm-linux-gnueabihf
+docker/imx-cross/check-target-abi.sh build/dist/linux_armv7/lib/arm-linux-gnueabihf
 
 # The gstreamer-1.0 package strips the runtime tarball when the imx variant is on
 ./cerbero-uninstalled -c "$CFG" package gstreamer-1.0
