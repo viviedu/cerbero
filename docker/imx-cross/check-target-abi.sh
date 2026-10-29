@@ -13,10 +13,6 @@ Each library must
   - be ARMv7 with NEON (Tag_CPU_arch: v7, Tag_Advanced_SIMD_arch: NEONv1)
   - use the hard-float ABI (Tag_ABI_VFP_args: VFP registers), as Debian armhf does
   - need no glibc symbol version newer than \$MAX_GLIBC (default 2.36, the box's bookworm glibc)
-Prints one FAIL line per violation and exits 1, or "OK <n> files" and exits 0.
-Run inside the cross-build container, e.g. after a package step:
-  docker/imx-cross/check-target-abi.sh build/dist/linux_armv7/lib/arm-linux-gnueabihf
-Environment: READELF, OBJDUMP (default arm-linux-gnueabihf-*), MAX_GLIBC.
 EOT
 }
 case "${1:-}" in -h|--help) usage; exit 0;; '') usage >&2; exit 2;; esac
