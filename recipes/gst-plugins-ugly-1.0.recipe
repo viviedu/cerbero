@@ -62,5 +62,9 @@ class Recipe(custom.GStreamer):
 
         # Vivi: x264 (GPL) intentionally disabled; do not enable it.
 
+        # Vivi i.MX: no AC-3 via a52dec (GPL); libav's avdec_ac3 covers it, as on the box today
+        if self.config.variants.imx:
+            self.disable_plugin('a52dec', 'codecs_gpl', dep='a52dec')
+
         if self.config.variants.nodebug:
             self.append_env('CFLAGS', '-DGST_LEVEL_MAX=GST_LEVEL_FIXME')
