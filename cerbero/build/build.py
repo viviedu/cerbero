@@ -757,6 +757,9 @@ class CMake(MakefilesBase):
             '-DCMAKE_CXX_FLAGS=' + cxxflags,
             '-DLIB_SUFFIX=' + self.config.lib_suffix,
         ]
+        # Without this a Linux cross build assembles .S files with the host /usr/bin/cc
+        if self.config.target_platform == Platform.LINUX and self.config.cross_compiling():
+            self.configure_options += ['-DCMAKE_ASM_COMPILER=' + cc, '-DCMAKE_ASM_FLAGS=' + cflags]
 
         cmake_cache = os.path.join(self.make_dir, 'CMakeCache.txt')
         cmake_files = os.path.join(self.make_dir, 'CMakeFiles')

@@ -361,15 +361,26 @@ class BaseTarball(object):
             return
         if not os.path.exists(self.download_dir):
             os.makedirs(self.download_dir)
-        await shell.download(
-            self.url,
-            fname,
-            check_cert=self.check_cert,
-            overwrite=redownload,
-            logfile=get_logfile(self),
-            fallback_urls=self.get_fallback_urls(self.url),
-        )
-        self.verify(fname, self.tarball_checksum)
+        # Try each URL in turn until one yields a tarball with the right checksum: a primary site that
+        # answers 200 with an HTML page (soft-switch.org, 2026-10) would otherwise stop us reaching the mirrors
+        urls = [self.url] + self.get_fallback_urls(self.url)
+        for i, url in enumerate(urls):
+            last = i == len(urls) - 1
+            try:
+                await shell.download(
+                    url,
+                    fname,
+                    check_cert=self.check_cert,
+                    overwrite=redownload or i > 0,
+                    logfile=get_logfile(self),
+                )
+            except FatalError as e:
+                if last:
+                    raise
+                m.action(N_('Download from %s failed (%s), trying the next mirror') % (url, e), logfile=get_logfile(self))
+                continue
+            if self.verify(fname, self.tarball_checksum, fatal=last):
+                return
 
     @staticmethod
     def _checksum(fname):
