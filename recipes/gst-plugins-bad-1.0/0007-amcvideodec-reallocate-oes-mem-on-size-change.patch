@@ -1,0 +1,81 @@
+From 5e4526e492e785350384aa94c20ed2529f73ee6f Mon Sep 17 00:00:00 2001
+From: t <a@b>
+Date: Mon, 2 Nov 2026 15:14:11 +1100
+Subject: [PATCH] amcvideodec: reallocate OES memory when the output size
+ changes
+
+The GL/Surface output path allocates self->oes_mem once, from the output
+state in force at the time, and reuses it for every output buffer. It is
+freed only in gst_amc_video_dec_close(); neither stop() nor flush()
+touches it.
+
+A mid-stream resolution change calls gst_amc_video_dec_set_src_caps(),
+which updates the output state and renegotiates, but never touches
+oes_mem. Every buffer pushed afterwards therefore carries memory sized
+for the OLD resolution while the caps advertise the new one, so
+gst_video_frame_map_id() rejects it:
+
+  video-frame.c:182 invalid buffer size 6718464 < 8294400
+  glimagesink.c:1786 prepare_next_buffer Failed to map video frame
+  ERROR from element sink: Failed to convert multiview video buffer
+
+and the pipeline dies with Internal data stream error.
+
+This only shows up when the element is NOT torn down across the change.
+If the change is slow enough that decodebin rebuilds the decoder,
+close() frees oes_mem and the next allocation picks up the new size,
+which is why the bug looks intermittent and timing-dependent.
+
+Reallocate the memory whenever the negotiated size no longer matches.
+---
+ .../sys/androidmedia/gstamcvideodec.c         | 34 +++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c b/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c
+index c7f5cb1..a208535 100644
+--- a/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c
++++ b/subprojects/gst-plugins-bad/sys/androidmedia/gstamcvideodec.c
+@@ -1413,6 +1413,40 @@ retry:
+ 
+     state = gst_video_decoder_get_output_state (GST_VIDEO_DECODER (self));
+ 
++    /* The OES memory is allocated once from the output state in force at the
++     * time and then reused for every output buffer. A mid-stream resolution
++     * change renegotiates the src caps but left this memory at its original
++     * size, so every later buffer carried the old geometry under the new caps
++     * and gst_video_frame_map_id() refused it:
++     *
++     *   video-frame.c:182 invalid buffer size 6718464 < 8294400
++     *   glimagesink prepare_next_buffer Failed to map video frame
++     *
++     * which errors out the pipeline. Drop the memory when the negotiated size
++     * no longer matches so it is reallocated below. */
++    if (self->oes_mem
++        && (GST_VIDEO_INFO_WIDTH (&self->oes_mem->info) !=
++            GST_VIDEO_INFO_WIDTH (&state->info)
++            || GST_VIDEO_INFO_HEIGHT (&self->oes_mem->info) !=
++            GST_VIDEO_INFO_HEIGHT (&state->info))) {
++      GST_DEBUG_OBJECT (self,
++          "output size changed from %dx%d to %dx%d, reallocating OES memory",
++          GST_VIDEO_INFO_WIDTH (&self->oes_mem->info),
++          GST_VIDEO_INFO_HEIGHT (&self->oes_mem->info),
++          GST_VIDEO_INFO_WIDTH (&state->info),
++          GST_VIDEO_INFO_HEIGHT (&state->info));
++
++      /* _dettach_mem_from_context() reads oes_mem->tex_id, so it has to run
++       * before the memory goes away. Buffers still in gl_queue hold their own
++       * reference and keep the old memory alive for as long as they need it. */
++      if (self->gl_mem_attached)
++        gst_gl_context_thread_add (self->gl_context,
++            (GstGLContextThreadFunc) _dettach_mem_from_context, self);
++
++      gst_memory_unref ((GstMemory *) self->oes_mem);
++      self->oes_mem = NULL;
++    }
++
+     if (!self->oes_mem) {
+       GstGLBaseMemoryAllocator *base_mem_alloc;
+       GstGLVideoAllocationParams *params;
+-- 
+2.54.0
+
