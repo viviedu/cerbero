@@ -7,7 +7,15 @@ class Recipe(recipe.Recipe):
     version = '0.23.93'
     btype = BuildType.MESON
     stype = SourceType.TARBALL
-    url = 'https://linuxtv.org/downloads/zbar/zbar-%(version)s.tar.gz'
+    # linuxtv.org now sits behind an Anubis anti-bot challenge that answers
+    # plain downloads with an HTML "Making sure you're not a bot!" page at
+    # HTTP 200. curl treats that as success, so the fetch "works" and the
+    # build dies later on a checksum mismatch, with a different hash every
+    # run (the page carries a fresh nonce). Cerbero's fallback mirrors are
+    # never tried, because nothing reported a download failure.
+    # Use the GStreamer mirror as the primary URL instead, as x264.recipe
+    # already does. Same bytes: 1354347 bytes, checksum below unchanged.
+    url = 'https://gstreamer.freedesktop.org/src/mirror/%(name)s/%(name)s-%(version)s.tar.gz'
     tarball_checksum = '78ae427a529f0399561bc198de5c2c7ca3f11d05fa9e903e65e501168433d218'
     files_libs = ['libzbar']
     files_devel = ['include/zbar.h', '%(libdir)s/pkgconfig/zbar.pc']
