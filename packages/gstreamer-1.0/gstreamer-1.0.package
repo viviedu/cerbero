@@ -66,6 +66,10 @@ class SDKPackage(custom.GStreamer, package.SDKPackage):
         if self.config.variants.uwp:
             self.platform_packages[Platform.WINDOWS] = []
 
+        # The i.MX runtime tarball ships to the box, so strip it (devel tarball keeps debug info)
+        if self.config.variants.imx:
+            self.strip = True
+
         # Breaks feature selection in MSIs
         if self.config.platform != Platform.WINDOWS:
             self.wix_use_fragment = True
