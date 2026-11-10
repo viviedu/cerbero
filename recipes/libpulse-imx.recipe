@@ -1,0 +1,76 @@
+# -*- Mode: Python -*- vi:si:et:sw=4:sts=4:ts=4:syntax=python
+import hashlib
+import os
+import shutil
+from cerbero.utils import shell
+from cerbero.errors import FatalError
+
+
+class Recipe(recipe.Recipe):
+    """Link-time libpulse for the i.MX cross build, taken from the box's own Debian packages.
+
+    Nothing is shipped: the pulseaudio plugin links libpulse.so.0 and resolves it from the device.
+    """
+    name = 'libpulse-imx'
+    version = '16.1+dfsg1-2+b1'
+    licenses = [License.LGPLv2_1Plus]
+    stype = SourceType.CUSTOM
+    btype = BuildType.CUSTOM
+
+    debs = {
+        'libpulse0': '84201e3529bd2ddf579726122647b423c8b91698ba671d63aa8288d90bf1690c',
+        'libpulse-dev': '00cfcda70dfbbf0b3085c294d0149ecc5ad21821e9b7e84df34d86272f356397',
+    }
+    url_tpl = 'https://deb.debian.org/debian/pool/main/p/pulseaudio/%s_%s_armhf.deb'
+
+    def _deb_path(self, pkg):
+        return os.path.join(self.config.local_sources, self.name, '%s_%s_armhf.deb' % (pkg, self.version))
+
+    def _src_dir(self):
+        return os.path.join(self.config.sources, '%s-%s' % (self.name, self.version))
+
+    async def fetch(self, **kwargs):
+        os.makedirs(os.path.dirname(self._deb_path('x')), exist_ok=True)
+        for pkg, sha in self.debs.items():
+            dest = self._deb_path(pkg)
+            if not os.path.exists(dest):
+                await shell.download(self.url_tpl % (pkg, self.version), dest, logfile=kwargs.get('logfile'))
+            with open(dest, 'rb') as f:
+                got = hashlib.sha256(f.read()).hexdigest()
+            if got != sha:
+                os.remove(dest)
+                raise FatalError('%s checksum mismatch: %s' % (dest, got))
+
+    async def extract(self):
+        d = self._src_dir()
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        for pkg in self.debs:
+            await shell.async_call(['ar', 'x', self._deb_path(pkg), 'data.tar.xz'], cmd_dir=d, logfile=self.logfile)
+            await shell.async_call(['tar', 'xJf', 'data.tar.xz'], cmd_dir=d, logfile=self.logfile)
+            os.remove(os.path.join(d, 'data.tar.xz'))
+
+    async def install(self):
+        d = self._src_dir()
+        src_lib = os.path.join(d, 'usr', 'lib', 'arm-linux-gnueabihf')
+        incdir = os.path.join(self.config.prefix, 'include')
+        shutil.rmtree(os.path.join(incdir, 'pulse'), ignore_errors=True)
+        shutil.copytree(os.path.join(d, 'usr', 'include', 'pulse'), os.path.join(incdir, 'pulse'))
+        os.makedirs(os.path.join(self.config.libdir, 'pkgconfig'), exist_ok=True)
+        for f in os.listdir(src_lib):
+            if f.startswith('libpulse.so'):
+                dst = os.path.join(self.config.libdir, f)
+                if os.path.lexists(dst):
+                    os.remove(dst)
+                s = os.path.join(src_lib, f)
+                if os.path.islink(s):
+                    os.symlink(os.readlink(s), dst)
+                else:
+                    shutil.copy2(s, dst)
+        with open(os.path.join(src_lib, 'pkgconfig', 'libpulse.pc')) as f:
+            pc = f.read()
+        pc = pc.replace('prefix=/usr\n', 'prefix=%s\n' % self.config.prefix, 1)
+        pc = pc.replace('libdir=/usr/lib/arm-linux-gnueabihf', 'libdir=%s' % self.config.libdir)
+        pc = pc.replace('includedir=/usr/include', 'includedir=%s' % os.path.join(self.config.prefix, 'include'))
+        with open(os.path.join(self.config.libdir, 'pkgconfig', 'libpulse.pc'), 'w') as f:
+            f.write(pc)
