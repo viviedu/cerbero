@@ -14,7 +14,7 @@ env:
   BUILDKITE_S3_DEFAULT_REGION: ap-southeast-2
 
 steps:
-  - label: ":boot: Bootstrap"
+  - label: ":android: Android bootstrap"
     key: bootstrap
     if: "'${bootstrap}' == 'true'"
     agents:
@@ -26,7 +26,7 @@ steps:
           cache-from: bootstrap:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-bootstrap
           push: bootstrap:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-bootstrap
 
-  - label: ":package: Package"
+  - label: ":android: Android package"
     key: package
     depends_on: bootstrap
     agents:

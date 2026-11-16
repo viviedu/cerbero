@@ -2,7 +2,7 @@ steps:
   - input: ":construction: Build"
     key: build_input
     fields:
-      - select: Bootstrap
+      - select: Bootstrap Android
         key: bootstrap
         hint: "Whether to build the bootstrap image, DO NOT SAY YES unless you really need to"
         default: "false"
