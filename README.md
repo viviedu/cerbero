@@ -400,7 +400,7 @@ Changes that apply to every Linux cross build (not Android): `config/linux.confi
 |---|---|---|
 | Android | `gstreamer-1.0-android-universal-1.26.11-vivi-<build>.tar.xz` | full SDK (runtime + devel), as before |
 | i.MX | `gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-<build>.tar.xz` | stripped runtime: `lib/arm-linux-gnueabihf/` libraries and `gstreamer-1.0/` plugins, `bin/gst-*`, `etc/ssl`, GIO modules |
-| i.MX | `gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-<build>-devel.tar.xz` | headers, `.pc` files, static libs and debug symbols for building the vivi-box addon |
+| i.MX | `gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-<build>-devel.tar.xz` | headers, `.pc` files, static libs and `lib*.so` link symlinks for building the vivi-box addon; no debug symbols, unpack over the runtime tarball to link |
 
 The i.MX runtime bundles its own glib, libsoup 3 and OpenSSL. A process using it must set `LD_LIBRARY_PATH` to the tarball's `lib/arm-linux-gnueabihf`, `GST_PLUGIN_PATH` to its `gstreamer-1.0/` plus the gstreamer-imx plugin directory, `GST_PLUGIN_SYSTEM_PATH=` (empty), `GIO_EXTRA_MODULES` to its `gio/modules`, and `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`. The gstreamer-imx 0.13 plugins (`imxvpu`, `imxg2d`, …) are not built here; the box's existing ones load against this core.
 
