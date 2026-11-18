@@ -388,7 +388,7 @@ This fork builds the GStreamer libraries for two Vivi platforms from one branch.
 | Target | arm64 + armv7 universal, NDK toolchain | ARMv7-A hard-float NEON, Debian bookworm glibc 2.36, `gcc-arm-linux-gnueabihf` |
 | Variant switch | none | `imx` (set by the config; off everywhere else) |
 | Vivi patches | base/good/bad patches in `recipes/` | the same, plus three i.MX-only patches under `recipes/gst-plugins-base-1.0/imx/` applied only when `imx` is on |
-| Dependencies | all bundled | all bundled |
+| Dependencies | all bundled | all bundled, except libpulse: `recipes/libpulse-imx.recipe` installs a link stub from the box's own Debian packages so the `pulseaudio` plugin resolves the device's `libpulse.so.0` at runtime |
 | Disabled on purpose | debug symbols (`nodebug`) | libgstgl/opengl (no GL winsys on the box), rust, x11, alsa, v4l2 |
 | Runtime tarball | unstripped | stripped (`strip = True` in the gstreamer-1.0 package when `imx` is on) |
 
