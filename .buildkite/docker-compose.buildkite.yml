@@ -7,3 +7,15 @@ services:
     build:
       context: ..
       dockerfile: .buildkite/Dockerfile.package
+  imx-base:
+    build:
+      context: ..
+      dockerfile: docker/imx-cross/Dockerfile
+  imx-bootstrap:
+    build:
+      context: ..
+      dockerfile: .buildkite/Dockerfile.imx-bootstrap
+  imx-package:
+    build:
+      context: ..
+      dockerfile: .buildkite/Dockerfile.imx-package
