@@ -11,4 +11,5 @@ docker build -q --platform "${native}" --build-arg SYSROOT_IMAGE="${SYSROOT_IMAG
 tty=""; [ -t 0 ] && tty="-t"
 exec docker run --rm -i $tty \
   -v "$PWD":/workspace -v gst-imx-debian-build:/build \
+  -e BUILDKITE_BUILD_NUMBER -e GST_SOURCE_URL \
   -w /workspace vivi/gst-imx-debian bash -lc "$*"
