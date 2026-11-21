@@ -66,7 +66,9 @@ meson_options=(
 )
 
 echo "--- fetch GStreamer ${version}"
-rm -rf "${work}"
+# the work directory is wiped on every run, so only accept one inside the container's build volume
+case "${work}" in /build/?*) ;; *) echo "GST_WORK_DIR must be under /build, got '${work}'" >&2; exit 1 ;; esac
+rm -rf -- "${work}"
 mkdir -p "${src}" "${out}"
 git -C "${src}" init -q
 git -C "${src}" fetch -q --depth 1 "${source_url}" "refs/tags/${version}"
