@@ -8,7 +8,7 @@ VIVI_IMX_FILENAME="gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-${BUILDKITE_BUILD
 VIVI_IMX_DEVEL_FILENAME="gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-${BUILDKITE_BUILD_NUMBER}-devel.tar.xz"
 
 # The i.MX build links against the dome-os rootfs at this commit; dome-os publishes the image (rootfs-image.sh)
-dome_os_commit=c49354ae0f87
+dome_os_commit=3654a29f312b
 dome_os_image="${VIVI_DOME_OS_IMAGE:-${GLOBAL_DOCKER_REGISTRY}/build-cache:dome-os-rootfs-${dome_os_commit}}"
 sysroot_image="${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-imx-sysroot-${dome_os_commit}"
 imx_build_image="${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-imx-build"
