@@ -26,7 +26,7 @@ fail=0
 check() { local name=$1; shift; if "$@"; then echo "PASS ${name}"; else echo "FAIL ${name}"; fail=1; fi; }
 
 # Every library is ARMv7 hard-float NEON and needs no glibc newer than the box's 2.36
-check target-abi "${repo}/docker/imx-cross/check-target-abi.sh" "${tree}/lib"
+check target-abi "${repo}/imx-debian/check-target-abi.sh" "${tree}/lib"
 
 # The tarball ships GStreamer only; every other library must come from dome-os
 gstreamer_only() {
