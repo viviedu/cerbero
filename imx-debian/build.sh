@@ -3,7 +3,7 @@
 # Runs inside the build container: SYSROOT_IMAGE=... imx-debian/run.sh imx-debian/build.sh
 set -euo pipefail
 
-version=1.26.11
+# the commit the upstream tag for that version must be; change it when recipes/custom.py moves to another version
 commit=e6ee9e63e033b9c8e343ba0bdfa7590ef81449ee
 source_url="${GST_SOURCE_URL:-https://gitlab.freedesktop.org/gstreamer/gstreamer.git}"
 build_number="${BUILDKITE_BUILD_NUMBER:-local}"
@@ -11,6 +11,8 @@ work="${GST_WORK_DIR:-/build/gst}"
 out="${GST_OUT_DIR:-/workspace/build/imx}"
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
+# the same GStreamer version the Android build uses
+version=$(python3 "${repo}/imx-debian/gst-version.py" "${repo}/recipes/custom.py")
 triplet=arm-linux-gnueabihf
 name="gstreamer-1.0-linux-armv7-imx6-${version}-vivi-${build_number}"
 src="${work}/src"
