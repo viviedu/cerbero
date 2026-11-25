@@ -16,26 +16,9 @@ name="gstreamer-1.0-linux-armv7-imx6-${version}-vivi-${build_number}"
 src="${work}/src"
 stage="${work}/dest/usr/local"
 
-# Same patches, in the same order, as recipes/gst-plugins-{base,good,bad}-1.0.recipe apply for the imx variant
-patches=(
-  gst-plugins-base-1.0/0001-tcpclientsink-add-property-to-get-socket-fd.patch
-  gst-plugins-base-1.0/0002-gstvolume-remove-GAP-FLAG.patch
-  gst-plugins-base-1.0/0001-Disable-proxy-on-GstRTSPConnection-s-GSocketClient.patch
-  gst-plugins-base-1.0/imx/0001-playback-Use-imx-elements.patch
-  gst-plugins-base-1.0/imx/0002-Shade-textoverlay-background-with-alpha-as-well.patch
-  gst-plugins-base-1.0/imx/0003-Precalculate-alpha_offset.patch
-  gst-plugins-good-1.0/0001-qtdemux-Raise-max-atom-size.patch
-  gst-plugins-good-1.0/0002-gstsouphttpsrc-remove-shared-session-check-in-auth_c.patch
-  gst-plugins-good-1.0/0003-soup-Just-set-User-Agent-on-the-session.patch
-  gst-plugins-good-1.0/0004-Proxy-stuff-originally-from-Andrew-Pritchard.patch
-  gst-plugins-good-1.0/0005-gstsouphttpsrc-pick-proxy-credentials-by-the-auth.patch
-  gst-plugins-bad-1.0/0001-amcvideodec-add-property-to-control-frame-dropping.patch
-  gst-plugins-bad-1.0/0001-Shot-in-the-dark-fix-for-tinyalsa-blocking.patch
-  gst-plugins-bad-1.0/0002-gstamc-codeclist-optional-isHardwareAccelerated-API28.patch
-  gst-plugins-bad-1.0/0004-Avoid-issues-with-buffer-cleanup-while-flushing.patch
-  gst-plugins-bad-1.0/0005-tsdemux-recover-at-PUSI-on-continuity-counter-mismatch.patch
-  gst-plugins-bad-1.0/0006-adaptivedemux-never-block-on-the-manifest-lock-when-handling-source-errors.patch
-)
+# Vivi patches in apply order, read from the recipes so the Android and i.MX builds cannot drift apart
+patch_list=$(python3 "${repo}/imx-debian/patch-list.py" "${repo}/recipes")
+mapfile -t patches <<< "${patch_list}"
 
 meson_options=(
   --cross-file "${repo}/imx-debian/armhf-cross.ini"
