@@ -26,7 +26,7 @@ steps:
     agents:
       queue: thicc
     plugins:
-      - docker-compose#v5.13.0:
+      - docker-compose#v5.17.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: bootstrap
           cache-from: bootstrap:${GLOBAL_DOCKER_REGISTRY}/build-cache:${BUILDKITE_PIPELINE_SLUG}-bootstrap
@@ -39,7 +39,7 @@ steps:
       queue: thicc
     command: .buildkite/scripts/package.sh
     plugins:
-      - docker-compose#v5.13.0:
+      - docker-compose#v5.17.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: package
           args:
@@ -52,7 +52,7 @@ steps:
             - VIVI_FILENAME=${VIVI_FILENAME}
           volumes:
             - ./artifacts:/workspace/artifacts
-      - artifacts#v1.9.4:
+      - artifacts#v1.11.0:
           upload:
             - artifacts/${VIVI_FILENAME}
 
@@ -63,7 +63,7 @@ steps:
     env:
       DOME_OS_IMAGE: ${dome_os_image}
     plugins:
-      - docker-compose#v5.13.0:
+      - docker-compose#v5.17.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: imx-sysroot
           # without the metadata this adds, cache-from finds nothing to reuse on an agent that has no local layers
@@ -80,7 +80,7 @@ steps:
     env:
       SYSROOT_IMAGE: ${sysroot_image}
     plugins:
-      - docker-compose#v5.13.0:
+      - docker-compose#v5.17.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: imx-build
           # without the metadata this adds, cache-from finds nothing to reuse on an agent that has no local layers
@@ -93,7 +93,7 @@ steps:
             - GST_OUT_DIR=/workspace/artifacts
           volumes:
             - ./:/workspace
-      - artifacts#v1.9.4:
+      - artifacts#v1.11.0:
           upload:
             - artifacts/${VIVI_IMX_FILENAME}
             - artifacts/${VIVI_IMX_DEVEL_FILENAME}
@@ -109,10 +109,10 @@ steps:
     env:
       SYSROOT_IMAGE: ${sysroot_image}
     plugins:
-      - artifacts#v1.9.4:
+      - artifacts#v1.11.0:
           download:
             - artifacts/${VIVI_IMX_FILENAME}
-      - docker-compose#v5.13.0:
+      - docker-compose#v5.17.0:
           config: .buildkite/docker-compose.buildkite.yml
           run: imx-smoke
           volumes:
