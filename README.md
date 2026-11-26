@@ -442,5 +442,3 @@ imx-debian/smoke-test.sh build/imx/gstreamer-1.0-linux-armv7-imx6-1.26.11-vivi-l
 ```
 
 `run.sh` mounts the checkout at `/workspace` and keeps the meson build tree in the Docker volume `gst-imx-debian-build`.
-
-The cerbero i.MX path (`config/cross-lin-imx6.cbc`, `docker/imx-cross/`, the `imx` variant) is no longer run by the pipeline and is removed in a follow-up.

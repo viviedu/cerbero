@@ -1,14 +1,14 @@
 #!/bin/bash
 # Check every *.so* under a directory carries the i.MX6 box's ABI. See --help.
 # Hard-float is the box's Debian armhf ABI: its glibc and libpulse pass floats in VFP registers, and the loader
-# refuses to mix hard- and soft-float objects. v7 and NEON are the Cortex-A9 features the .cbc selects with
+# refuses to mix hard- and soft-float objects. v7 and NEON are the Cortex-A9 features armhf-cross.ini selects with
 # -mfpu=neon (matching the box's existing GStreamer libs); asserting them catches a build where those flags were lost.
 set -uo pipefail
 usage() {
   cat <<EOT
 usage: check-target-abi.sh <dir>
 
-Gate for the i.MX6 cross build: checks every *.so* under <dir> will load on the box.
+Gate for the i.MX6 meson cross build: checks every *.so* under <dir> will load on the box.
 Each library must
   - be ARMv7 with NEON (Tag_CPU_arch: v7, Tag_Advanced_SIMD_arch: NEONv1)
   - use the hard-float ABI (Tag_ABI_VFP_args: VFP registers), as Debian armhf does
