@@ -12,11 +12,12 @@ steps:
     depends_on:
       - package
       - imx_package
+      - imx_smoke
     agents:
       queue: v6
     command: .buildkite/scripts/links.sh ${VIVI_FILENAME} ${VIVI_IMX_FILENAME} ${VIVI_IMX_DEVEL_FILENAME}
     plugins:
-      - artifacts#v1.9.4:
+      - artifacts#v1.11.0:
           download:
             - from: artifacts/${VIVI_FILENAME}
               to: ${VIVI_FILENAME}

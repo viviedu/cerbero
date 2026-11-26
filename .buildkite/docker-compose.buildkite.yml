@@ -7,15 +7,22 @@ services:
     build:
       context: ..
       dockerfile: .buildkite/Dockerfile.package
-  imx-base:
+  # dome-os rootfs plus -dev packages; armhf, built under emulation
+  imx-sysroot:
+    platform: linux/arm/v7
     build:
-      context: ..
-      dockerfile: docker/imx-cross/Dockerfile
-  imx-bootstrap:
+      context: ../imx-debian
+      dockerfile: Dockerfile.sysroot
+      args:
+        - DOME_OS_IMAGE
+  # native build container with the sysroot copied in
+  imx-build:
     build:
-      context: ..
-      dockerfile: .buildkite/Dockerfile.imx-bootstrap
-  imx-package:
-    build:
-      context: ..
-      dockerfile: .buildkite/Dockerfile.imx-package
+      context: ../imx-debian
+      dockerfile: Dockerfile
+      args:
+        - SYSROOT_IMAGE
+  # the sysroot image as pushed, for running the tarball on dome-os's own libraries
+  imx-smoke:
+    image: ${SYSROOT_IMAGE:-vivi/gst-imx-sysroot}
+    platform: linux/arm/v7
