@@ -1,0 +1,98 @@
+# dome-os rootfs plus the Debian -dev packages GStreamer builds against, at the versions dome-os ships.
+# DOME_OS_IMAGE comes from dome-os .buildkite/scripts/rootfs-image.sh (local tag or registry digest).
+ARG DOME_OS_IMAGE
+FROM ${DOME_OS_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Record what dome-os ships before anything is added; the last step compares against this
+RUN mkdir -p /var/lib/vivi-sysroot && \
+    dpkg-query -W -f '${db:Status-Abbrev} ${Package} ${Version}\n' | awk '$1=="ii"{print $2, $3}' | sort \
+        > /var/lib/vivi-sysroot/dome-os-packages.txt
+
+# The Debian snapshot whose package versions match the dome-os rootfs; move it only together with dome-os
+ARG DEBIAN_SNAPSHOT=20250512T000000Z
+RUN printf '%s\n' \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT} bookworm main non-free-firmware" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT} bookworm-updates main non-free-firmware" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT} bookworm-security main non-free-firmware" \
+        > /etc/apt/sources.list && \
+    printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod 755 /usr/sbin/policy-rc.d
+
+# dome-os has libnss3 from a later security update than the snapshot, and libsrtp2-dev needs the matching libnss3-dev
+# curl and sha256sum rather than ADD --checksum, which the Docker 20.10 agents cannot parse
+RUN mkdir -p /tmp/debs && cd /tmp/debs && \
+    curl -fsSL -O https://snapshot.debian.org/archive/debian-security/20260811T000000Z/pool/updates/main/n/nss/libnss3-dev_3.87.1-1+deb12u4_armhf.deb && \
+    echo "769f050528d139196036a9906266769d8e883315b78029cd07113ba44af68758  libnss3-dev_3.87.1-1+deb12u4_armhf.deb" | sha256sum -c -
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends --no-remove \
+        /tmp/debs/*.deb \
+        iso-codes \
+        libaom-dev \
+        libass-dev \
+        libavcodec-dev \
+        libavfilter-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libbz2-dev \
+        libcairo2-dev \
+        libdav1d-dev \
+        libdca-dev \
+        libde265-dev \
+        libdv4-dev \
+        libfaad-dev \
+        libflac-dev \
+        libgdk-pixbuf-2.0-dev \
+        libglib2.0-dev \
+        libgupnp-igd-1.0-dev \
+        libjpeg-dev \
+        libjson-glib-dev \
+        libltc-dev \
+        libmp3lame-dev \
+        libmpg123-dev \
+        libnice-dev \
+        libogg-dev \
+        libopencore-amrnb-dev \
+        libopencore-amrwb-dev \
+        libopenh264-dev \
+        libopenjp2-7-dev \
+        libopus-dev \
+        liborc-0.4-dev \
+        libpango1.0-dev \
+        libpng-dev \
+        libpulse-dev \
+        librtmp-dev \
+        libsbc-dev \
+        libsoundtouch-dev \
+        libsoup-3.0-dev \
+        libspandsp-dev \
+        libspeex-dev \
+        libsrt-openssl-dev \
+        libsrtp2-dev \
+        libssl-dev \
+        libsvtav1enc-dev \
+        libswresample-dev \
+        libtag1-dev \
+        libtheora-dev \
+        libvo-aacenc-dev \
+        libvorbis-dev \
+        libvpx-dev \
+        libwavpack-dev \
+        libwebp-dev \
+        libx264-dev \
+        libx265-dev \
+        libxml2-dev \
+        libzbar-dev \
+        zlib1g-dev \
+        && \
+    apt-get clean && rm -rf /tmp/debs
+
+# Parity gate: every package dome-os shipped must still be installed at the same version
+RUN dpkg-query -W -f '${db:Status-Abbrev} ${Package} ${Version}\n' | awk '$1=="ii"{print $2, $3}' | sort \
+        > /var/lib/vivi-sysroot/sysroot-packages.txt && \
+    cd /var/lib/vivi-sysroot && \
+    comm -13 dome-os-packages.txt sysroot-packages.txt > added-packages.txt && \
+    comm -23 dome-os-packages.txt sysroot-packages.txt > changed-packages.txt && \
+    echo "$(wc -l < added-packages.txt) packages added to dome-os" && \
+    if [ -s changed-packages.txt ]; then echo "dome-os packages changed or removed:"; cat changed-packages.txt; exit 1; fi
