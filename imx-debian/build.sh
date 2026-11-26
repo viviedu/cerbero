@@ -22,6 +22,7 @@ stage="${work}/dest/usr/local"
 patch_list=$(python3 "${repo}/imx-debian/patch-list.py" "${repo}/recipes")
 mapfile -t patches <<< "${patch_list}"
 
+# Hand-set to match the cerbero i.MX build, whose plugin set was the upstream cerbero recipe defaults narrowed by the variants in config/cross-lin-imx6.cbc
 meson_options=(
   --cross-file "${repo}/imx-debian/armhf-cross.ini"
   --prefix=/usr/local --libdir="lib/${triplet}" --buildtype=release
