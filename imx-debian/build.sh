@@ -82,23 +82,8 @@ DESTDIR="${work}/dest" meson install -C "${work}/build" --no-rebuild --strip > "
 
 echo "--- list the Debian packages the libraries need"
 cd "${stage}"
-elfs=$(find . -type f -exec sh -c 'head -c4 "$1" | grep -q ELF' _ {} \; -print)
-# libsoup is loaded with dlopen and TLS comes from a GIO module, so neither appears in NEEDED
-packages="libsoup-3.0-0 glib-networking"
-for so in $(echo "${elfs}" | xargs "${triplet}-readelf" -d | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort -u); do
-  case "${so}" in libgst*|libges*) continue ;; esac
-  owner=$(dpkg --admindir=/sysroot/var/lib/dpkg -S "*/${so}" 2>/dev/null | head -1 | cut -d: -f1)
-  if [[ -z "${owner}" ]]; then
-    echo "${so} is not owned by a Debian package in the sysroot" >&2
-    exit 1
-  fi
-  packages+=" ${owner}"
-done
 mkdir -p share/vivi-gstreamer
-for package in $(echo "${packages}" | tr ' ' '\n' | sort -u); do
-  awk -v p="${package}" '$1 == p { print $1 "=" $2; found = 1 } END { exit !found }' \
-    /sysroot/var/lib/vivi-sysroot/sysroot-packages.txt
-done > share/vivi-gstreamer/debian-runtime-deps.txt
+python3 "${repo}/imx-debian/runtime-deps.py" . > share/vivi-gstreamer/debian-runtime-deps.txt
 cp share/vivi-gstreamer/debian-runtime-deps.txt "${out}/${name}-debian-runtime-deps.txt"
 
 echo "--- pack"
