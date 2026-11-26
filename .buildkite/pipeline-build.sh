@@ -66,6 +66,8 @@ steps:
       - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: imx-sysroot
+          # without the metadata this adds, cache-from finds nothing to reuse on an agent that has no local layers
+          buildkit-inline-cache: true
           cache-from: imx-sysroot:${sysroot_image}
           push: imx-sysroot:${sysroot_image}
 
@@ -81,6 +83,8 @@ steps:
       - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.buildkite.yml
           build: imx-build
+          # without the metadata this adds, cache-from finds nothing to reuse on an agent that has no local layers
+          buildkit-inline-cache: true
           cache-from: imx-build:${imx_build_image}
           push: imx-build:${imx_build_image}
           run: imx-build
